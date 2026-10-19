@@ -11,7 +11,6 @@
   1. Nguyen Hoang Long — Student ID: 23IT.B119 — Role: Solo Developer (Flutter Frontend, ML Kit OCR, Regex Heuristics, Custom Canvas, SQLite Backend) — Contribution: 100%
 * **📦 Signed Release APK:** `release/app-release.apk` (40.0 MB, RSA-2048 Signed & Verified via `apksigner`)
 * **💻 GitHub Repository:** https://github.com/TieuLong07/receipt-expense-tracker
-* **📄 Technical Report PDF:** `release/VKU_MiniProject3_Report.pdf` (4-page technical PDF)
 * **🎥 Video Demo (Optional):** — (link submitted separately if applicable)
 
 ---
@@ -62,8 +61,7 @@ receipt_expense_tracker/
 │   └── screens/
 │       └── home_screen.dart             # Main dashboard: spending cards, chart switcher, receipt list, FAB
 ├── release/
-│   ├── app-release.apk                  # Signed production APK (40.0 MB, apksigner verified)
-│   └── VKU_MiniProject3_Report.pdf      # 4-page technical PDF report
+│   └── app-release.apk                  # Signed production APK (40.0 MB, apksigner verified)
 ├── test/
 │   ├── receipt_regex_parser_test.dart   # Unit tests for Vietnamese & international receipts (100% pass)
 │   └── widget_test.dart                 # Smoke test for VKUExpenseApp widget tree
