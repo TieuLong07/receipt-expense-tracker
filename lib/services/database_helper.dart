@@ -23,8 +23,15 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          try {
+            await db.execute("ALTER TABLE receipts ADD COLUMN items_json TEXT DEFAULT '[]'");
+          } catch (_) {}
+        }
+      },
     );
   }
 
@@ -38,6 +45,7 @@ class DatabaseHelper {
         category TEXT NOT NULL,
         image_path TEXT,
         raw_ocr_text TEXT,
+        items_json TEXT DEFAULT '[]',
         sync_status TEXT NOT NULL DEFAULT 'pending_sync',
         created_at TEXT NOT NULL
       )

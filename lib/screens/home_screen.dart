@@ -67,8 +67,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         builder: (ctx) => ReviewReceiptDialog(
           initialMerchant: parsed.merchant,
           initialAmount: parsed.amount,
+          initialSubtotal: parsed.subtotal,
           initialDate: parsed.date,
           initialCategory: parsed.category,
+          initialItems: parsed.items,
           imagePath: savedImagePath,
           rawOcrText: parsed.rawText,
         ),
@@ -462,8 +464,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               builder: (ctx) => ReviewReceiptDialog(
                                 initialMerchant: receipt.merchant,
                                 initialAmount: receipt.amount,
+                                initialSubtotal: receipt.amount,
                                 initialDate: receipt.date,
                                 initialCategory: receipt.category,
+                                initialItems: receipt.items,
                                 imagePath: receipt.imagePath,
                                 rawOcrText: receipt.rawOcrText,
                                 existingId: receipt.id,
@@ -483,21 +487,39 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          subtitle: Row(
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(dateFormat.format(receipt.date)),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: color.withValues(alpha:0.1),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  receipt.category,
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color),
-                                ),
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Text(dateFormat.format(receipt.date)),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: color.withValues(alpha:0.1),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      receipt.category,
+                                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color),
+                                    ),
+                                  ),
+                                ],
                               ),
+                              if (receipt.items.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${receipt.items.length} items: ${receipt.items.map((e) => e.name).take(2).join(", ")}${receipt.items.length > 2 ? "..." : ""}',
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        fontSize: 11,
+                                        color: Theme.of(context).colorScheme.outline,
+                                      ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ],
                           ),
                           trailing: Column(
