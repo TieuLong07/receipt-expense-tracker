@@ -15,6 +15,7 @@ class ReviewReceiptDialog extends StatefulWidget {
   final String? imagePath;
   final String? rawOcrText;
   final int? existingId;
+  final String engineName;
 
   const ReviewReceiptDialog({
     super.key,
@@ -27,6 +28,7 @@ class ReviewReceiptDialog extends StatefulWidget {
     this.imagePath,
     this.rawOcrText,
     this.existingId,
+    this.engineName = 'Cloudflare AI Vision',
   });
 
   @override
@@ -221,8 +223,8 @@ class _ReviewReceiptDialogState extends State<ReviewReceiptDialog> {
                       Expanded(
                         child: Text(
                           _items.isNotEmpty
-                              ? 'Extracted ${_items.length} items with On-Device ML Kit'
-                              : 'Extracted by On-Device ML Kit & Regex Engine',
+                              ? 'Extracted ${_items.length} items with ${widget.engineName}'
+                              : 'Analyzed by ${widget.engineName}',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 fontWeight: FontWeight.w600,
                                 color: Theme.of(context).colorScheme.onPrimaryContainer,
@@ -264,7 +266,7 @@ class _ReviewReceiptDialogState extends State<ReviewReceiptDialog> {
                   },
                 ),
 
-                // Quick selector chips if subtotal != payable total
+                // Quick selector chips if subtotal != payable total (e.g. vouchers, store credits)
                 if (widget.initialSubtotal > 0 && widget.initialSubtotal != widget.initialAmount) ...[
                   const SizedBox(height: 8),
                   Wrap(
@@ -272,7 +274,7 @@ class _ReviewReceiptDialogState extends State<ReviewReceiptDialog> {
                     children: [
                       ActionChip(
                         avatar: const Icon(Icons.check_circle_outline, size: 14),
-                        label: Text('Net Pay: ${currencyFormat.format(widget.initialAmount)}'),
+                        label: Text('Thực trả: ${currencyFormat.format(widget.initialAmount)}'),
                         onPressed: () {
                           setState(() {
                             _amountController.text = widget.initialAmount.toStringAsFixed(0);
@@ -281,7 +283,7 @@ class _ReviewReceiptDialogState extends State<ReviewReceiptDialog> {
                       ),
                       ActionChip(
                         avatar: const Icon(Icons.shopping_cart_outlined, size: 14),
-                        label: Text('Gross: ${currencyFormat.format(widget.initialSubtotal)}'),
+                        label: Text('Tổng hàng: ${currencyFormat.format(widget.initialSubtotal)}'),
                         onPressed: () {
                           setState(() {
                             _amountController.text = widget.initialSubtotal.toStringAsFixed(0);

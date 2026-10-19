@@ -97,6 +97,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             initialItems: serverResult.items,
             imagePath: savedImagePath,
             rawOcrText: serverResult.rawText,
+            engineName: 'Cloudflare DeepSeek Vision',
           ),
         );
 
@@ -140,6 +141,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               initialItems: geminiResult.items,
               imagePath: savedImagePath,
               rawOcrText: geminiResult.rawResponse,
+              engineName: 'Gemini Flash Vision',
             ),
           );
 
@@ -209,6 +211,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           initialItems: parsed.items,
           imagePath: savedImagePath,
           rawOcrText: parsed.rawText,
+          engineName: 'On-Device ML Kit',
         ),
       );
 
@@ -672,6 +675,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                 imagePath: receipt.imagePath,
                                 rawOcrText: receipt.rawOcrText,
                                 existingId: receipt.id,
+                                engineName: 'Saved Receipt',
                               ),
                             );
                             if (updated != null && mounted) {
