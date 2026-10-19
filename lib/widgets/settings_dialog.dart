@@ -98,8 +98,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
             TextField(
               controller: _serverUrlController,
               decoration: const InputDecoration(
-                labelText: 'Server URL',
-                hintText: 'http://192.168.1.7:3000',
+                labelText: 'Server URL (Cloudflare Worker 24/7)',
+                hintText: 'https://receipt-expense-ai.nguyenhlong2203.workers.dev',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.dns_outlined),
               ),

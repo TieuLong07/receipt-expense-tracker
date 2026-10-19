@@ -10,8 +10,8 @@ import 'receipt_regex_parser.dart';
 class BackendApiService {
   static const String _prefServerUrl = 'backend_server_url';
   
-  // Default server URLs: localhost / LAN / emulator
-  static const String defaultServerUrl = 'http://10.0.2.2:3000'; // Standard Android emulator loopback
+  // Default server: Cloudflare 24/7 Serverless Worker
+  static const String defaultServerUrl = 'https://receipt-expense-ai.nguyenhlong2203.workers.dev';
 
   Future<String> getServerUrl() async {
     final prefs = await SharedPreferences.getInstance();
