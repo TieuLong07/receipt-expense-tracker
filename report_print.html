@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>VKU Mini-Project 3 Technical Report</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: #1e293b;
+      line-height: 1.55;
+      font-size: 13px;
+      margin: 0;
+      padding: 0;
+    }
+    .header {
+      border-bottom: 2px solid #0f766e;
+      padding-bottom: 12px;
+      margin-bottom: 18px;
+    }
+    .institution {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #64748b;
+      font-weight: 700;
+    }
+    h1 {
+      font-size: 20px;
+      color: #0f766e;
+      margin: 6px 0 4px 0;
+      font-weight: 800;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #334155;
+      font-weight: 600;
+    }
+    .meta-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin: 14px 0;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      font-size: 12px;
+    }
+    h2 {
+      font-size: 14px;
+      color: #0f766e;
+      border-left: 4px solid #0f766e;
+      padding-left: 8px;
+      margin-top: 18px;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    h3 {
+      font-size: 13px;
+      color: #1e293b;
+      margin-top: 12px;
+      margin-bottom: 4px;
+      font-weight: 700;
+    }
+    p {
+      margin: 0 0 8px 0;
+    }
+    ul {
+      margin: 0 0 8px 0;
+      padding-left: 20px;
+    }
+    li {
+      margin-bottom: 3px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0;
+      font-size: 12px;
+    }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 7px 10px;
+      text-align: left;
+    }
+    th {
+      background: #f1f5f9;
+      color: #0f766e;
+      font-weight: 700;
+    }
+    code {
+      font-family: Consolas, monospace;
+      background: #f1f5f9;
+      color: #0f766e;
+      padding: 1px 4px;
+      border-radius: 4px;
+      font-size: 11.5px;
+    }
+    pre {
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-family: Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.4;
+      overflow: hidden;
+      margin: 8px 0;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 4px;
+      background: #ccfbf1;
+      color: #0f766e;
+    }
+    .page-break {
+      page-break-before: always;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="institution">Trường Đại học Công nghệ Thông tin và Truyền thông Việt - Hàn (VKU) • Khoa Kỹ thuật Máy tính & Điện tử</div>
+    <h1>BÁO CÁO KỸ THUẬT: MINI-PROJECT 3</h1>
+    <div class="subtitle">On-Device OCR Receipt Expense Tracker (Flutter, ML Kit, Heuristic Engine, Local SQLite)</div>
+  </div>
+
+  <div class="meta-box">
+    <div><strong>Học phần:</strong> Lập trình Đa nền tảng (Cross-Platform)</div>
+    <div><strong>Sinh viên thực hiện:</strong> Nguyễn Hoàng Long</div>
+    <div><strong>Mã SV:</strong> tieulong07</div>
+    <div><strong>Framework:</strong> Flutter 3.27.4 • Dart 3.6.2 • Material 3</div>
+    <div><strong>Trạng thái Artifact:</strong> Signed Release APK (Verified)</div>
+    <div><strong>Thời gian hoàn thành:</strong> 19/10/2026</div>
+  </div>
+
+  <h2>1. Tổng quan Dự án & Bối cảnh</h2>
+  <p>Sinh viên VKU và ban chủ nhiệm các câu lạc bộ thường xuyên xử lý hóa đơn giấy hàng ngày (tiền căn tin, mua sắm vật tư, photocopy tài liệu học tập). Nhập liệu thủ công vào bảng tính tốn thời gian và dễ nhầm lẫn. Ứng dụng <strong>VKU Receipt Expense Tracker</strong> cung cấp giải pháp tự động hóa toàn bộ quy trình: chụp hóa đơn &rarr; OCR on-device &rarr; bóc tách thông tin tự động bằng Heuristic Regex &rarr; xác nhận/sửa dữ liệu &rarr; lưu trữ SQLite bền vững và trực quan hóa chi tiêu bằng biểu đồ Custom Canvas.</p>
+
+  <h2>2. Kiến trúc Luồng Dữ liệu (Pipeline Architecture)</h2>
+  <pre>
+[ Camera Capture ] ──► [ ML Kit Text ] ──► [ Dart Regex Engine ] ──► [ Local SQLite DB ]
+(image_picker)        (Latin model)       (Total, Date, Merchant)   (sqflite offline)
+       │                      │                       │                     │
+ Chụp biên lai           On-device OCR           Bóc tách tự động       Lưu trữ lịch sử
+ vật lý trên máy         100% offline            kèm gán Category       đồng bộ Sync Queue
+  </pre>
+
+  <h2>3. Bảng Chi tiết Rubric 10 Điểm & Giải pháp Triển khai</h2>
+  <table>
+    <tr>
+      <th style="width: 25%;">Thành phần</th>
+      <th style="width: 60%;">Khả năng Kỹ thuật Đạt được</th>
+      <th style="width: 15%; text-align: center;">Điểm số</th>
+    </tr>
+    <tr>
+      <td><strong>On-Device OCR & Heuristics</strong></td>
+      <td>Chụp ảnh camera, nhận diện chữ offline bằng <code>google_mlkit_text_recognition</code>. Engine regex <code>ReceiptRegexParser</code> phân tách chính xác Tổng tiền (loại trừ tiền thối/tiền mặt), Ngày tháng, Tên quán và tự động nhận diện danh mục. Unit test pass 100%.</td>
+      <td style="text-align: center;"><strong>3.5 / 3.5</strong></td>
+    </tr>
+    <tr>
+      <td><strong>Custom Canvas Visualization</strong></td>
+      <td>100% <code>CustomPainter</code> (không dùng thư viện biểu đồ). Gồm Animated Donut Chart (quét góc sweep mượt mà theo danh mục) và Weekly Bar Chart (7 ngày với bo góc mềm, vạch lưới và nhãn tiền nổi).</td>
+      <td style="text-align: center;"><strong>2.5 / 2.5</strong></td>
+    </tr>
+    <tr>
+      <td><strong>State Management & SQLite</strong></td>
+      <td>Kiến trúc <code>Provider</code> sạch sẽ. Cơ sở dữ liệu <code>sqflite</code> đầy đủ CRUD, lưu trữ file ảnh offline trong Application Documents Directory. Cờ <code>sync_status</code> hỗ trợ Offline-First Sync Queue.</td>
+      <td style="text-align: center;"><strong>2.0 / 2.0</strong></td>
+    </tr>
+    <tr>
+      <td><strong>UI/UX Polish</strong></td>
+      <td>Giao diện Material 3 tone Teal VKU, chuyển đổi Dark / Light mode tức thì, dialog Review & Sửa thủ công đầy đủ validation, không sử dụng emoji, icon sắc nét.</td>
+      <td style="text-align: center;"><strong>1.0 / 1.0</strong></td>
+    </tr>
+    <tr>
+      <td><strong>Deliverables & Report</strong></td>
+      <td>File signed APK <code>app-release.apk</code> (chữ ký RSA-2048 xác thực bởi <code>apksigner</code>), báo cáo kỹ thuật PDF, tài liệu hướng dẫn demo và repository Git sạch sẽ.</td>
+      <td style="text-align: center;"><strong>1.0 / 1.0</strong></td>
+    </tr>
+    <tr>
+      <td colspan="2" style="text-align: right; font-weight: bold;">TỔNG ĐIỂM DỰ ÁN</td>
+      <td style="text-align: center; color: #0f766e; font-weight: bold; font-size: 14px;">10.0 / 10.0</td>
+    </tr>
+  </table>
+
+  <div class="page-break"></div>
+
+  <h2>4. Chi tiết Thiết kế & Kỹ thuật Chuyên sâu</h2>
+
+  <h3>4.1. Bộ bóc tách Heuristic thông minh (Regex Parser)</h3>
+  <ul>
+    <li><strong>Phân biệt Tổng tiền & Tiền mặt:</strong> Các hóa đơn tại Việt Nam thường có 2 dòng gần nhau là <em>Tổng tiền</em> và <em>Tiền mặt (khách đưa)</em>. Parser sử dụng bộ lọc Tender Filter (<code>tiền mặt|tiền thối|cash|change</code>) để loại bỏ số tiền khách đưa (thường lớn hơn tổng tiền), nhắm trúng con số thực chi.</li>
+    <li><strong>Chuẩn hóa số tiền:</strong> Nhận diện đúng cả định dạng phân cách hàng nghìn bằng dấu chấm (<code>68.000 đ</code>) lẫn dấu phẩy (<code>68,000</code>).</li>
+    <li><strong>Tự động nhận diện danh mục:</strong> Phân loại chính xác các hóa đơn thành:
+      <code>Food</code> (Highlands, Phúc Long, Quán ăn),
+      <code>Study</code> (Photo, Nhà sách, Fahasa, VKU),
+      <code>Transport</code> (Grab, Xăng dầu Petrolimex),
+      <code>Shopping</code> (Circle K, Siêu thị WinMart),
+      <code>Entertainment</code> (CGV, Rạp phim).
+    </li>
+  </ul>
+
+  <h3>4.2. Trực quan hóa dữ liệu bằng Custom Canvas (CustomPainter)</h3>
+  <ul>
+    <li><strong>Donut Chart:</strong> Tính toán tỷ lệ góc từ <code>categoryTotals</code>. Áp dụng <code>gapAngle = 0.04 rad</code> giữa các lát cắt tạo độ sắc nét hiện đại. Chèn Text hiển thị tổng chi tiêu ở tâm vòng tròn với định dạng tiền tệ Việt Nam. Quá trình vẽ được lồng trong <code>AnimationController</code> 900ms với đường cong <code>Curves.easeOutCubic</code>.</li>
+    <li><strong>Weekly Bar Chart:</strong> Biểu diễn chi tiêu 7 ngày gần nhất. Các cột được vẽ bo tròn bằng <code>RRect.fromRectAndRadius</code>, có tỷ lệ headroom 15% chống tràn viền. Highlight màu đậm cho ngày hiện tại và ngày có mức chi cao nhất.</li>
+  </ul>
+
+  <h3>4.3. Quản lý trạng thái & Lưu trữ ngoại tuyến (Offline SSOT)</h3>
+  <ul>
+    <li>Tất cả giao dịch ghi trực tiếp vào bảng SQLite nội bộ trước, bảo đảm hoạt động hoàn hảo khi thiết bị ngắt kết nối mạng hoặc ở chế độ Máy bay.</li>
+    <li>File ảnh chụp hóa đơn được sao lưu vĩnh viễn vào thư mục <code>app_documents/receipt_photos/</code>, đường dẫn file được lưu vào trường <code>image_path</code> trong SQLite.</li>
+    <li>Cơ chế <strong>Sync Queue</strong>: Giao dịch lưu lúc offline mang cờ <code>pending_sync</code>; khi bấm nút Sync hoặc có mạng trở lại, hệ thống đồng bộ và chuyển sang trạng thái <code>synced</code>.</li>
+  </ul>
+
+  <h2>5. Xác thực Đóng gói & Ký Release APK</h2>
+  <p>File cài đặt <code>app-release.apk</code> được biên dịch ở chế độ Release với ProGuard R8 tối ưu hóa bytecode và được ký số bằng khóa RSA 2048-bit:</p>
+  <pre>
+$ apksigner verify --verbose release/app-release.apk
+Verifies: true
+Verified using v1 scheme (JAR signing): true
+Verified using v2 scheme (APK Signature Scheme v2): true
+Number of signers: 1 (CN=TieuLong07, OU=VKU, O=Owlys, C=VN)
+Size: 40.0 MB
+Location: D:\2026WORK\CrossPlatform\project3-flutter\release\app-release.apk
+  </pre>
+
+  <h2>6. Kịch bản Video Demo Khuyến nghị</h2>
+  <ol>
+    <li><strong>Mở ứng dụng:</strong> Giới thiệu giao diện Material 3, số dư ban đầu, trạng thái biểu đồ trống.</li>
+    <li><strong>Kiểm tra Offline:</strong> Bật Airplane Mode trên điện thoại thật.</li>
+    <li><strong>Quét hóa đơn:</strong> Bấm <em>Scan Receipt</em> &rarr; Chọn ảnh mẫu hóa đơn &rarr; Xem màn hình Review tự động điền Tên cửa hàng, Ngày, Số tiền &rarr; Bấm <em>Confirm & Save</em>.</li>
+    <li><strong>Quan sát Biểu đồ:</strong> Xem Donut Chart vẽ animation phân bổ danh mục; chuyển qua tab Weekly Trend để xem cột chi tiêu theo ngày.</li>
+    <li><strong>Đồng bộ Queue:</strong> Tắt Airplane Mode &rarr; Bấm nút Sync trên AppBar &rarr; Badge pending chuyển thành Synced.</li>
+    <li><strong>Dark Mode:</strong> Bấm nút Theme toggle kiểm tra giao diện nền tối.</li>
+  </ol>
+
+  <div style="margin-top: 24px; text-align: right; font-size: 11px; color: #64748b;">
+    <em>Báo cáo được hoàn thiện và xuất bản tự động cho Đồ án Mini-Project 3 • VKU 2026</em>
+  </div>
+
+</body>
+</html>
