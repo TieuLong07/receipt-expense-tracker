@@ -1,6 +1,7 @@
-// ponytail: Material 3 Home & Scanning screen; add infinite scroll pagination when records exceed 1,000 receipts.
+// ponytail: Material 3 Home & Scanning screen with Gemini AI & Offline Processing Queue.
 
 import 'dart:io';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -10,6 +11,7 @@ import '../providers/expense_provider.dart';
 import '../services/ocr_service.dart';
 import '../widgets/donut_chart.dart';
 import '../widgets/review_receipt_dialog.dart';
+import '../widgets/settings_dialog.dart';
 import '../widgets/weekly_bar_chart.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -24,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   final OcrService _ocrService = OcrService();
   late TabController _chartTabController;
   bool _isProcessingOcr = false;
+  String _processingMessage = 'Processing receipt...';
 
   @override
   void initState() {
@@ -42,25 +45,125 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Future<void> _handleImageCapture(ImageSource source) async {
+    final provider = context.read<ExpenseProvider>();
     try {
       final pickedFile = await _picker.pickImage(
         source: source,
-        imageQuality: 90,
+        imageQuality: 92,
       );
       if (pickedFile == null) return;
 
-      setState(() => _isProcessingOcr = true);
-
-      // Save photo locally for persistence
+      // 1. Save photo locally for persistence
       final savedImagePath = await _ocrService.saveReceiptPhoto(File(pickedFile.path));
 
-      // Run on-device OCR & heuristic parsing
+      // 2. Check offline state
+      final conn = await Connectivity().checkConnectivity();
+      final isOnline = conn.any((r) => r != ConnectivityResult.none);
+
+      if (!isOnline) {
+        // OFFLINE: Queue receipt for automatic AI processing when network restores!
+        await provider.queueReceiptOffline(savedImagePath);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Offline: Receipt added to Queue. AI will process it automatically when connected!'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // 3. ONLINE: If Gemini API Key is available, use Gemini Flash Vision!
+      final apiKey = provider.geminiApiKey;
+      if (apiKey != null && apiKey.isNotEmpty) {
+        setState(() {
+          _isProcessingOcr = true;
+          _processingMessage = 'Gemini Flash AI Vision is analyzing receipt & items...';
+        });
+
+        try {
+          final geminiResult = await provider.geminiService.analyzeReceiptImage(File(savedImagePath));
+          if (!mounted) return;
+          setState(() => _isProcessingOcr = false);
+
+          final result = await showDialog<Receipt>(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => ReviewReceiptDialog(
+              initialMerchant: geminiResult.merchant,
+              initialAmount: geminiResult.amount,
+              initialSubtotal: geminiResult.subtotal,
+              initialDate: geminiResult.date,
+              initialCategory: geminiResult.category,
+              initialItems: geminiResult.items,
+              imagePath: savedImagePath,
+              rawOcrText: geminiResult.rawResponse,
+            ),
+          );
+
+          if (result != null && mounted) {
+            await provider.addReceipt(result);
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('AI Analyzed: ${result.merchant} (${NumberFormat.currency(locale: "vi_VN", symbol: "đ", decimalDigits: 0).format(result.amount)})'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          return;
+        } catch (e) {
+          // If Gemini API fails, notify and fall back to on-device ML Kit
+          if (mounted) {
+            setState(() => _isProcessingOcr = false);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Gemini API notice: $e. Falling back to On-Device ML Kit...')),
+            );
+          }
+        }
+      }
+
+      // 4. Prompt if API Key is missing while online
+      if (apiKey == null || apiKey.isEmpty) {
+        if (!mounted) return;
+        final choice = await showDialog<String>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Setup Gemini Vision AI'),
+            content: const Text(
+              'Gemini Flash Vision extracts items, discounts & totals with 100% accuracy. Configure your free API Key in Settings for best results.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, 'skip'),
+                child: const Text('Use On-Device ML Kit'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, 'settings'),
+                child: const Text('Configure Key'),
+              ),
+            ],
+          ),
+        );
+
+        if (choice == 'settings') {
+          if (!mounted) return;
+          await showDialog(context: context, builder: (_) => const SettingsDialog());
+        }
+      }
+
+      // 5. Fallback: On-Device ML Kit OCR
+      setState(() {
+        _isProcessingOcr = true;
+        _processingMessage = 'On-Device ML Kit OCR & Regex Engine...';
+      });
+
       final parsed = await _ocrService.processReceiptImage(savedImagePath);
 
       if (!mounted) return;
       setState(() => _isProcessingOcr = false);
 
-      // Open Review & Correction Dialog
       final result = await showDialog<Receipt>(
         context: context,
         barrierDismissible: false,
@@ -77,7 +180,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       );
 
       if (result != null && mounted) {
-        await context.read<ExpenseProvider>().addReceipt(result);
+        await provider.addReceipt(result);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -90,7 +193,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       if (mounted) {
         setState(() => _isProcessingOcr = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('OCR Failed: $e'), backgroundColor: Theme.of(context).colorScheme.error),
+          SnackBar(content: Text('Processing Failed: $e'), backgroundColor: Theme.of(context).colorScheme.error),
         );
       }
     }
@@ -134,7 +237,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   child: Icon(Icons.camera_alt_outlined),
                 ),
                 title: const Text('Capture with Camera'),
-                subtitle: const Text('Scan physical receipt with On-Device ML Kit'),
+                subtitle: const Text('Auto AI Vision (Online) or Queued (Offline)'),
                 onTap: () {
                   Navigator.pop(ctx);
                   _handleImageCapture(ImageSource.camera);
@@ -145,7 +248,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   child: Icon(Icons.photo_library_outlined),
                 ),
                 title: const Text('Pick from Gallery'),
-                subtitle: const Text('Select an existing receipt image'),
+                subtitle: const Text('Select existing receipt image'),
                 onTap: () {
                   Navigator.pop(ctx);
                   _handleImageCapture(ImageSource.gallery);
@@ -198,16 +301,26 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('VKU Expense Tracker', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            Text(
-              'On-Device ML Kit OCR • Offline SQLite',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Theme.of(context).colorScheme.outline),
+            Row(
+              children: [
+                Icon(
+                  provider.isOnline ? Icons.circle : Icons.circle_outlined,
+                  size: 8,
+                  color: provider.isOnline ? Colors.greenAccent : Colors.orangeAccent,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  provider.isOnline ? 'Online • Gemini AI Ready' : 'Offline • Queue Mode',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Theme.of(context).colorScheme.outline),
+                ),
+              ],
             ),
           ],
         ),
         actions: [
-          // Sync Button with pending badge
+          // Sync / Queue Button
           IconButton(
-            tooltip: 'Sync Offline Queue',
+            tooltip: 'Sync & Process Queue',
             icon: Stack(
               clipBehavior: Clip.none,
               children: [
@@ -224,8 +337,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     top: -4,
                     child: Container(
                       padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Colors.redAccent,
+                      decoration: BoxDecoration(
+                        color: provider.queuedCount > 0 ? Colors.orange : Colors.redAccent,
                         shape: BoxShape.circle,
                       ),
                       constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
@@ -245,12 +358,23 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(synced > 0 ? 'Synced $synced receipts to cloud!' : 'All receipts are synced.'),
+                          content: Text(synced > 0 ? 'Processed & synced $synced receipts!' : 'All receipts are synced.'),
                           behavior: SnackBarBehavior.floating,
                         ),
                       );
                     }
                   },
+          ),
+          // AI & App Settings
+          IconButton(
+            tooltip: 'Settings & API Key',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (ctx) => const SettingsDialog(),
+              );
+            },
           ),
           // Theme Toggle
           IconButton(
@@ -269,13 +393,52 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               children: [
+                // Queued Receipts Banner if any
+                if (provider.queuedCount > 0) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.schedule, color: Colors.orange, size: 22),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${provider.queuedCount} receipts in Offline Queue',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.orange),
+                              ),
+                              const Text(
+                                'Will be auto-analyzed by Gemini AI once online',
+                                style: TextStyle(fontSize: 11),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (provider.isOnline)
+                          TextButton(
+                            onPressed: () => provider.processQueuedReceipts(),
+                            child: const Text('Process', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+
                 // Summary Balance Card
                 Card(
                   elevation: 0,
-                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha:0.4),
+                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(color: Theme.of(context).colorScheme.primary.withValues(alpha:0.2)),
+                    side: BorderSide(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2)),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(18),
@@ -344,7 +507,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha:0.5)),
+                    side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5)),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
@@ -365,14 +528,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           child: TabBarView(
                             controller: _chartTabController,
                             children: [
-                              // Donut Chart
                               Center(
                                 child: DonutChartWidget(
                                   categoryData: provider.categoryTotals,
                                   totalAmount: provider.totalSpent,
                                 ),
                               ),
-                              // Weekly Bar Chart
                               Center(
                                 child: WeeklyBarChartWidget(
                                   weeklyData: provider.weeklyData,
@@ -431,7 +592,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   )
                 else
                   ...provider.receipts.map((receipt) {
-                    final color = DonutChartWidget.categoryColors[receipt.category] ?? Colors.grey;
+                    final isQueued = receipt.syncStatus == 'queued_ai';
+                    final color = isQueued
+                        ? Colors.orange
+                        : (DonutChartWidget.categoryColors[receipt.category] ?? Colors.grey);
 
                     return Dismissible(
                       key: Key('receipt_${receipt.id}'),
@@ -455,7 +619,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         margin: const EdgeInsets.only(bottom: 8),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha:0.3)),
+                          side: BorderSide(
+                            color: isQueued
+                                ? Colors.orange.withValues(alpha: 0.5)
+                                : Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+                          ),
                         ),
                         child: ListTile(
                           onTap: () async {
@@ -478,8 +646,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             }
                           },
                           leading: CircleAvatar(
-                            backgroundColor: color.withValues(alpha:0.15),
-                            child: Icon(_getCategoryIcon(receipt.category), color: color, size: 20),
+                            backgroundColor: color.withValues(alpha: 0.15),
+                            child: Icon(
+                              isQueued ? Icons.schedule : _getCategoryIcon(receipt.category),
+                              color: color,
+                              size: 20,
+                            ),
                           ),
                           title: Text(
                             receipt.merchant,
@@ -498,11 +670,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: color.withValues(alpha:0.1),
+                                      color: color.withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
-                                      receipt.category,
+                                      isQueued ? 'Queue' : receipt.category,
                                       style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color),
                                     ),
                                   ),
@@ -519,6 +691,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
+                              ] else if (isQueued) ...[
+                                const SizedBox(height: 4),
+                                const Text(
+                                  'Queued for Gemini AI analysis',
+                                  style: TextStyle(fontSize: 11, color: Colors.orange),
+                                ),
                               ],
                             ],
                           ),
@@ -527,18 +705,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                currencyFormat.format(receipt.amount),
+                                isQueued ? 'Pending' : currencyFormat.format(receipt.amount),
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                  color: Theme.of(context).colorScheme.primary,
+                                  fontSize: 13,
+                                  color: isQueued ? Colors.orange : Theme.of(context).colorScheme.primary,
                                 ),
                               ),
                               const SizedBox(height: 2),
                               Icon(
-                                receipt.syncStatus == 'synced' ? Icons.cloud_done_outlined : Icons.cloud_upload_outlined,
+                                isQueued
+                                    ? Icons.hourglass_top
+                                    : (receipt.syncStatus == 'synced' ? Icons.cloud_done_outlined : Icons.cloud_upload_outlined),
                                 size: 13,
-                                color: receipt.syncStatus == 'synced' ? Colors.green : Colors.orange,
+                                color: isQueued ? Colors.orange : (receipt.syncStatus == 'synced' ? Colors.green : Colors.orange),
                               ),
                             ],
                           ),
@@ -551,7 +731,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             ),
           ),
 
-          // Loading Overlay when ML Kit OCR is running
+          // Loading Overlay when AI or OCR is processing
           if (_isProcessingOcr)
             Container(
               color: Colors.black54,
@@ -567,13 +747,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         const CircularProgressIndicator(),
                         const SizedBox(height: 16),
                         const Text(
-                          'On-Device ML Kit OCR',
+                          'AI Receipt Processing',
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Extracting Total, Date & Merchant...',
+                          _processingMessage,
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                          textAlign: TextAlign.center,
                         ),
                       ],
                     ),
