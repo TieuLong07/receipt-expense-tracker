@@ -115,9 +115,9 @@ class _DonutChartWidgetState extends State<DonutChartWidget> with SingleTickerPr
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
+                color: color.withValues(alpha:0.12),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: color.withOpacity(0.3)),
+                border: Border.all(color: color.withValues(alpha:0.3)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -166,7 +166,7 @@ class _DonutChartPainter extends CustomPainter {
     const strokeWidth = 24.0;
 
     final backgroundPaint = Paint()
-      ..color = theme.colorScheme.surfaceContainerHighest.withOpacity(0.4)
+      ..color = theme.colorScheme.surfaceContainerHighest.withValues(alpha:0.4)
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth;
 

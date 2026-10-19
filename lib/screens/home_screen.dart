@@ -76,6 +76,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
       if (result != null && mounted) {
         await context.read<ExpenseProvider>().addReceipt(result);
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Saved: ${result.merchant} (${NumberFormat.currency(locale: "vi_VN", symbol: "đ", decimalDigits: 0).format(result.amount)})'),
@@ -269,10 +270,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 // Summary Balance Card
                 Card(
                   elevation: 0,
-                  color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.4),
+                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha:0.4),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(color: Theme.of(context).colorScheme.primary.withOpacity(0.2)),
+                    side: BorderSide(color: Theme.of(context).colorScheme.primary.withValues(alpha:0.2)),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(18),
@@ -341,7 +342,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.5)),
+                    side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha:0.5)),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
@@ -452,7 +453,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         margin: const EdgeInsets.only(bottom: 8),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.3)),
+                          side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha:0.3)),
                         ),
                         child: ListTile(
                           onTap: () async {
@@ -473,7 +474,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             }
                           },
                           leading: CircleAvatar(
-                            backgroundColor: color.withOpacity(0.15),
+                            backgroundColor: color.withValues(alpha:0.15),
                             child: Icon(_getCategoryIcon(receipt.category), color: color, size: 20),
                           ),
                           title: Text(
@@ -489,7 +490,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: color.withOpacity(0.1),
+                                  color: color.withValues(alpha:0.1),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Text(

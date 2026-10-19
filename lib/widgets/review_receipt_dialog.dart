@@ -131,7 +131,7 @@ class _ReviewReceiptDialogState extends State<ReviewReceiptDialog> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5),
+                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha:0.5),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(

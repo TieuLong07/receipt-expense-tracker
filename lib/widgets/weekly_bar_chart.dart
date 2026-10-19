@@ -139,7 +139,7 @@ class _WeeklyBarChartPainter extends CustomPainter {
 
     // Draw grid guide lines
     final gridPaint = Paint()
-      ..color = theme.colorScheme.outlineVariant.withOpacity(0.3)
+      ..color = theme.colorScheme.outlineVariant.withValues(alpha:0.3)
       ..strokeWidth = 1.0;
 
     for (int i = 0; i <= 2; i++) {
@@ -191,7 +191,7 @@ class _WeeklyBarChartPainter extends CustomPainter {
           ? theme.colorScheme.primary
           : isMax
               ? theme.colorScheme.tertiary
-              : theme.colorScheme.primary.withOpacity(0.35);
+              : theme.colorScheme.primary.withValues(alpha:0.35);
 
       final barPaint = Paint()..color = barColor;
       canvas.drawRRect(rrect, barPaint);
