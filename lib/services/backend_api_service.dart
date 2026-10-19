@@ -34,7 +34,10 @@ class BackendApiService {
 
     final response = await http.post(
       url,
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'VKUExpenseTracker/1.0.0 (Android; Mobile)',
+      },
       body: jsonEncode({
         'image_base64': base64Image,
         'mime_type': 'image/jpeg',
@@ -94,7 +97,9 @@ class BackendApiService {
       final baseUrl = customUrl ?? await getServerUrl();
       final cleanBase = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
       final url = Uri.parse('$cleanBase/api/health');
-      final res = await http.get(url).timeout(const Duration(seconds: 4));
+      final res = await http.get(url, headers: {
+        'User-Agent': 'VKUExpenseTracker/1.0.0 (Android; Mobile)',
+      }).timeout(const Duration(seconds: 4));
       return res.statusCode == 200;
     } catch (_) {
       return false;
