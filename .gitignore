@@ -47,3 +47,5 @@ app.*.map.json
 *.jks
 android/local.properties
 /release/*.apk
+node_modules/
+.env

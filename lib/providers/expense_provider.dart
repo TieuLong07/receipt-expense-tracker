@@ -1,4 +1,4 @@
-// ponytail: Reactive state management with SQLite SSOT, Gemini Vision client & offline auto-processing queue.
+// ponytail: Reactive state management with SQLite SSOT, Server-side LLM completion client & offline queue.
 
 import 'dart:async';
 import 'dart:io';
@@ -6,12 +6,14 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/receipt.dart';
+import '../services/backend_api_service.dart';
 import '../services/database_helper.dart';
 import '../services/gemini_service.dart';
 import '../widgets/weekly_bar_chart.dart';
 
 class ExpenseProvider extends ChangeNotifier {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+  final BackendApiService _backendService = BackendApiService();
   final GeminiService _geminiService = GeminiService();
   final Connectivity _connectivity = Connectivity();
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
@@ -21,6 +23,7 @@ class ExpenseProvider extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.system;
   bool _isSyncing = false;
   bool _isOnline = true;
+  String _serverUrl = BackendApiService.defaultServerUrl;
   String? _geminiApiKey;
 
   List<Receipt> get receipts => _receipts;
@@ -28,7 +31,9 @@ class ExpenseProvider extends ChangeNotifier {
   ThemeMode get themeMode => _themeMode;
   bool get isSyncing => _isSyncing;
   bool get isOnline => _isOnline;
+  String get serverUrl => _serverUrl;
   String? get geminiApiKey => _geminiApiKey;
+  BackendApiService get backendService => _backendService;
   GeminiService get geminiService => _geminiService;
 
   List<Receipt> get queuedReceipts => _receipts.where((r) => r.syncStatus == 'queued_ai').toList();
@@ -78,7 +83,7 @@ class ExpenseProvider extends ChangeNotifier {
 
   ExpenseProvider() {
     _initConnectivity();
-    _loadApiKey();
+    _loadConfig();
   }
 
   void _initConnectivity() {
@@ -88,16 +93,25 @@ class ExpenseProvider extends ChangeNotifier {
         _isOnline = online;
         notifyListeners();
         if (_isOnline) {
-          // When network is restored, automatically process any queued receipts!
           processQueuedReceipts();
         }
       }
     });
   }
 
-  Future<void> _loadApiKey() async {
+  Future<void> _loadConfig() async {
+    _serverUrl = await _backendService.getServerUrl();
     _geminiApiKey = await _geminiService.getApiKey();
     notifyListeners();
+  }
+
+  Future<void> setServerUrl(String url) async {
+    await _backendService.setServerUrl(url);
+    _serverUrl = url.trim();
+    notifyListeners();
+    if (_isOnline) {
+      processQueuedReceipts();
+    }
   }
 
   Future<void> setGeminiApiKey(String key) async {
@@ -177,7 +191,7 @@ class ExpenseProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Automatically process receipts that were queued while offline using Gemini Vision.
+  /// Automatically process receipts that were queued while offline.
   Future<int> processQueuedReceipts() async {
     if (_isSyncing || !_isOnline) return 0;
     final queued = queuedReceipts;
@@ -187,27 +201,20 @@ class ExpenseProvider extends ChangeNotifier {
     notifyListeners();
 
     int successCount = 0;
-    final apiKey = _geminiApiKey;
-    if (apiKey == null || apiKey.isEmpty) {
-      _isSyncing = false;
-      notifyListeners();
-      return 0;
-    }
 
     for (final receipt in queued) {
       if (receipt.imagePath != null && File(receipt.imagePath!).existsSync()) {
+        final imageFile = File(receipt.imagePath!);
         try {
-          final res = await _geminiService.analyzeReceiptImage(
-            File(receipt.imagePath!),
-            overrideKey: apiKey,
-          );
+          // 1. Try server-side LLM backend
+          final res = await _backendService.analyzeReceiptViaServer(imageFile);
           final updated = receipt.copyWith(
             merchant: res.merchant,
             amount: res.amount,
             date: res.date,
             category: res.category,
             items: res.items,
-            rawOcrText: res.rawResponse,
+            rawOcrText: res.rawText,
             syncStatus: 'synced',
           );
           await _dbHelper.updateReceipt(updated);
@@ -216,7 +223,30 @@ class ExpenseProvider extends ChangeNotifier {
             _receipts[idx] = updated;
           }
           successCount++;
+          continue;
         } catch (_) {}
+
+        // 2. Fallback to direct Gemini Vision if key configured
+        if (_geminiApiKey != null && _geminiApiKey!.isNotEmpty) {
+          try {
+            final res = await _geminiService.analyzeReceiptImage(imageFile, overrideKey: _geminiApiKey);
+            final updated = receipt.copyWith(
+              merchant: res.merchant,
+              amount: res.amount,
+              date: res.date,
+              category: res.category,
+              items: res.items,
+              rawOcrText: res.rawResponse,
+              syncStatus: 'synced',
+            );
+            await _dbHelper.updateReceipt(updated);
+            final idx = _receipts.indexWhere((r) => r.id == receipt.id);
+            if (idx != -1) {
+              _receipts[idx] = updated;
+            }
+            successCount++;
+          } catch (_) {}
+        }
       }
     }
 
@@ -228,7 +258,6 @@ class ExpenseProvider extends ChangeNotifier {
   Future<int> syncPendingReceipts() async {
     if (_isSyncing) return 0;
 
-    // Process queued offline receipts first
     final queuedProcessed = await processQueuedReceipts();
 
     _isSyncing = true;

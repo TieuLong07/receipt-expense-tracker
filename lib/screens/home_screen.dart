@@ -74,7 +74,48 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         return;
       }
 
-      // 3. ONLINE: If Gemini API Key is available, use Gemini Flash Vision!
+      // 3. ONLINE: Try Backend Server first (Zero client API key needed!)
+      setState(() {
+        _isProcessingOcr = true;
+        _processingMessage = 'AI Server is analyzing receipt & line items...';
+      });
+
+      try {
+        final serverResult = await provider.backendService.analyzeReceiptViaServer(File(savedImagePath));
+        if (!mounted) return;
+        setState(() => _isProcessingOcr = false);
+
+        final result = await showDialog<Receipt>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => ReviewReceiptDialog(
+            initialMerchant: serverResult.merchant,
+            initialAmount: serverResult.amount,
+            initialSubtotal: serverResult.subtotal,
+            initialDate: serverResult.date,
+            initialCategory: serverResult.category,
+            initialItems: serverResult.items,
+            imagePath: savedImagePath,
+            rawOcrText: serverResult.rawText,
+          ),
+        );
+
+        if (result != null && mounted) {
+          await provider.addReceipt(result);
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('AI Analyzed: ${result.merchant} (${NumberFormat.currency(locale: "vi_VN", symbol: "đ", decimalDigits: 0).format(result.amount)})'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      } catch (e) {
+        debugPrint('Backend server notice: $e');
+      }
+
+      // 4. Fallback A: Direct Gemini Flash Vision if API Key is configured on client
       final apiKey = provider.geminiApiKey;
       if (apiKey != null && apiKey.isNotEmpty) {
         setState(() {
@@ -113,15 +154,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             );
           }
           return;
-        } catch (e) {
-          // If Gemini API fails, notify and fall back to on-device ML Kit
-          if (mounted) {
-            setState(() => _isProcessingOcr = false);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Gemini API notice: $e. Falling back to On-Device ML Kit...')),
-            );
-          }
-        }
+        } catch (_) {}
       }
 
       // 4. Prompt if API Key is missing while online

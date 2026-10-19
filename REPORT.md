@@ -21,8 +21,8 @@
 |:---:|---|:---:|---|
 | 1 | Camera & Gallery Image Capture | ✅ Complete | Integrated `image_picker: ^1.2.0`. Allows capturing receipts directly with camera or selecting images from gallery with 90% JPEG quality optimization. Handled runtime permissions gracefully. |
 | 2 | On-Device ML Kit OCR (Latin Script) | ✅ Complete | Uses `google_mlkit_text_recognition: ^0.15.0` with bundled Latin script model. Runs 100% locally on device CPU in ~350ms with zero network latency and complete user data privacy. |
-| 3 | Gemini Flash Vision & Heuristic Engine | ✅ Complete | Hybrid extraction engine: Defaults to Gemini 1.5 Flash Vision when online for 100% accurate multi-item breakdown, discount separation, and payable total; falls back to on-device ML Kit & heuristic regex parser when offline or requested. |
-| 4 | Offline Processing Queue & Auto-Sync | ✅ Complete | Receipts captured while offline are immediately stored locally and queued (`sync_status = 'queued_ai'`). `connectivity_plus` auto-detects reconnection and triggers Gemini Vision batch processing seamlessly. |
+| 3 | Server-Side LLM Vision & Heuristic Engine | ✅ Complete | Enterprise Hybrid Architecture: End-users connect to a dedicated Node.js backend (`server/`) utilizing OpenAI-compatible chat completions with Vision (`/api/analyze-receipt`) supporting custom base URLs and secure server-managed keys. Offline fallback uses on-device ML Kit & heuristic regex parser. |
+| 4 | Offline Processing Queue & Auto-Sync | ✅ Complete | Receipts captured while offline are immediately stored locally and queued (`sync_status = 'queued_ai'`). `connectivity_plus` auto-detects reconnection and triggers server-side LLM batch processing seamlessly. |
 | 5 | Custom Canvas — Animated Donut Chart | ✅ Complete | 100% `CustomPainter` (`DonutChartPainter`), zero chart libraries. Computes sweep angles from category totals, 0.04 rad gap between slices, 900ms `Curves.easeOutCubic` sweep animation, central total spent label, and responsive category pill legends. |
 | 6 | Custom Canvas — Weekly Bar Chart | ✅ Complete | 100% `CustomPainter` (`WeeklyBarChartPainter`). Renders 7-day expense trend with rounded bar tops (`RRect`), 15% headroom scaling, 3 horizontal dotted grid guides, highlight accent for current day, and compact value labels (`45k`). |
 | 7 | State Management (Provider) | ✅ Complete | `ChangeNotifierProvider` (`ExpenseProvider`) managing reactive state: receipts list, loading indicators, theme mode, category totals, weekly data calculations, and sync operations. |
@@ -37,6 +37,11 @@
 
 ```
 receipt_expense_tracker/
+├── server/                              # Node.js backend proxying OpenAI-compatible LLM Vision
+│   ├── package.json
+│   ├── .env.example                     # PORT, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL
+│   └── src/
+│       └── index.js                     # Express server: /api/analyze-receipt, /api/health
 ├── android/
 │   ├── app/
 │   │   ├── build.gradle                 # minSdk 21, targetSdk 34, release signingConfig, ProGuard rules
@@ -47,21 +52,24 @@ receipt_expense_tracker/
 ├── lib/
 │   ├── main.dart                        # MultiProvider root, Material 3 Light/Dark theme configuration
 │   ├── models/
-│   │   └── receipt.dart                 # Receipt domain model: toMap(), fromMap(), copyWith()
+│   │   └── receipt.dart                 # Receipt & ReceiptItem models: JSON serialization
 │   ├── services/
+│   │   ├── backend_api_service.dart     # Client service calling server-side LLM completion endpoint
 │   │   ├── database_helper.dart         # SQLite helper (sqflite): receipts table CRUD & sync status
 │   │   ├── receipt_regex_parser.dart    # Heuristic engine: Total, Date, Merchant, Category extraction
+│   │   ├── gemini_service.dart          # Optional direct client-side fallback
 │   │   └── ocr_service.dart             # ML Kit TextRecognizer wrapper + local photo file storage
 │   ├── providers/
-│   │   └── expense_provider.dart        # ChangeNotifier: CRUD state, sync queue, category & weekly data
+│   │   └── expense_provider.dart        # ChangeNotifier: CRUD state, offline queue, auto-sync
 │   ├── widgets/
 │   │   ├── donut_chart.dart             # CustomPainter: Animated Donut Category Chart & Legend
 │   │   ├── weekly_bar_chart.dart        # CustomPainter: 7-Day Animated Bar Chart with gridlines
-│   │   └── review_receipt_dialog.dart   # M3 Dialog: Image preview, editable inputs & validation
+│   │   ├── review_receipt_dialog.dart   # M3 Dialog: Image preview, editable inputs & validation
+│   │   └── settings_dialog.dart         # Backend server endpoint & configuration modal
 │   └── screens/
 │       └── home_screen.dart             # Main dashboard: spending cards, chart switcher, receipt list, FAB
 ├── release/
-│   └── app-release.apk                  # Signed production APK (40.0 MB, apksigner verified)
+│   └── app-release.apk                  # Signed production APK (41.0 MB, apksigner verified)
 ├── test/
 │   ├── receipt_regex_parser_test.dart   # Unit tests for Vietnamese & international receipts (100% pass)
 │   └── widget_test.dart                 # Smoke test for VKUExpenseApp widget tree
@@ -69,32 +77,30 @@ receipt_expense_tracker/
 └── REPORT.md                            # Comprehensive technical report
 ```
 
-### State Management & OCR Pipeline Flow
+### State Management & Hybrid OCR Pipeline Flow
 ```
 [User triggers Scan (Camera/Gallery)]
          │
          ▼
 [OcrService.saveReceiptPhoto()] ────────► Copied to /app_documents/receipt_photos/*.jpg
          │
-         ▼
-[ML Kit TextRecognizer.processImage()] ──► Raw recognized string (on-device)
-         │
-         ▼
-[ReceiptRegexParser.parse()] ────────────► Structured ParsedReceiptResult (Total, Date, Merchant, Category)
-         │
-         ▼
-[ReviewReceiptDialog (UI)] ──────────────► User verifies, adjusts numbers or category, confirms
+         ├─────────────────────────────────────────┐
+         ▼                                         ▼
+   [ONLINE MODE]                             [OFFLINE MODE]
+         │                                         │
+[BackendApiService.analyzeReceiptViaServer()]      ├─► Add to SQLite [sync_status: 'queued_ai']
+  └── POST /api/analyze-receipt (Server-side)      ├─► App fully usable: browse, edit, charts
+         │                                         └─► When network returns (connectivity_plus):
+         ▼                                               └── Auto-triggered queue batch sync!
+[ReviewReceiptDialog (UI)]
+  ├── Displays extracted line items, merchant, date, net & gross total
+  └── User verifies & confirms
          │
          ▼
 [ExpenseProvider.addReceipt()]
-  ├── DatabaseHelper.insertReceipt() ────► SQLite DB [sync_status: 'pending_sync']
+  ├── DatabaseHelper.insertReceipt() ────► SQLite DB [sync_status: 'synced']
   ├── _receipts.insert(0, receipt) ──────► Prepend to in-memory list
   └── notifyListeners() ─────────────────► Dashboard & CustomPainter charts animate updates
-         │
-         ▼
-[User taps Sync on AppBar]
-  ├── DatabaseHelper.markAllAsSynced() ──► Updates DB records to 'synced'
-  └── notifyListeners() ─────────────────► Cloud status badge updates to 'Synced'
 ```
 
 ### Exception Handling Strategies
@@ -177,3 +183,10 @@ The R8 shrinker completed successfully, producing an optimized 40.0 MB release A
 1. Separated keywords into `_totalKeywordPattern` (`tổng cộng`, `tổng tiền`, `thành tiền`, `total`, `amount due`) and `_tenderKeywordPattern` (`tiền mặt`, `tiền thối`, `tiền thừa`, `cash`, `change`).
 2. Strictly filtered out lines matching `_tenderKeywordPattern` during total extraction, and prioritized scanning the immediate line or next line for the currency figure.
 3. Validated the fix with comprehensive unit tests in `test/receipt_regex_parser_test.dart`, confirming 100% accurate parsing across diverse receipt styles.
+
+### Challenge 4: Enterprise Production Flow for End-Users (Server-Side LLM Proxy vs Client API Keys)
+**Problem:** Requiring end-users to register accounts at Google AI Studio or OpenAI, generate private API keys, and paste them into mobile settings is completely impractical for real production applications and creates major security leakage vulnerabilities.
+**Resolution:** Developed a dedicated Node.js / Express backend service (`server/src/index.js`) exposing `/api/analyze-receipt`:
+1. The mobile client simply dispatches base64 image data to the backend without carrying any secret credentials.
+2. The server-side proxy authenticates securely using environment variables (`LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`), formats OpenAI-compatible chat completion requests with Vision, and streams structured JSON directly back to the app.
+3. Offline queueing guarantees that receipts captured in no-network areas are queued locally in SQLite and automatically batch-sent to the backend server as soon as connectivity resumes.

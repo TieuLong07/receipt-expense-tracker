@@ -1,4 +1,4 @@
-// ponytail: Settings & API Key dialog; add multi-provider selection (OpenAI, Claude, DeepSeek) when multi-LLM is needed.
+// ponytail: Settings dialog with Backend Server URL & fallback API key.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +12,7 @@ class SettingsDialog extends StatefulWidget {
 }
 
 class _SettingsDialogState extends State<SettingsDialog> {
+  late TextEditingController _serverUrlController;
   late TextEditingController _keyController;
   bool _obscureKey = true;
 
@@ -19,11 +20,13 @@ class _SettingsDialogState extends State<SettingsDialog> {
   void initState() {
     super.initState();
     final provider = context.read<ExpenseProvider>();
+    _serverUrlController = TextEditingController(text: provider.serverUrl);
     _keyController = TextEditingController(text: provider.geminiApiKey ?? '');
   }
 
   @override
   void dispose() {
+    _serverUrlController.dispose();
     _keyController.dispose();
     super.dispose();
   }
@@ -35,9 +38,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
     return AlertDialog(
       title: Row(
         children: [
-          Icon(Icons.settings_outlined, color: Theme.of(context).colorScheme.primary),
+          Icon(Icons.tune_outlined, color: Theme.of(context).colorScheme.primary),
           const SizedBox(width: 10),
-          const Text('AI & App Settings', style: TextStyle(fontSize: 18)),
+          const Text('Backend & AI Settings', style: TextStyle(fontSize: 18)),
         ],
       ),
       content: SingleChildScrollView(
@@ -65,7 +68,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   Expanded(
                     child: Text(
                       provider.isOnline
-                          ? 'Online Mode: Gemini Flash AI Active'
+                          ? 'Online Mode: Server-Side AI Active'
                           : 'Offline Mode: Receipts will be Queued',
                       style: TextStyle(
                         fontSize: 12,
@@ -81,32 +84,52 @@ class _SettingsDialogState extends State<SettingsDialog> {
             ),
             const SizedBox(height: 16),
 
-            // Gemini API Key Input
+            // Backend Server URL Input
             Text(
-              'Google Gemini API Key',
+              'Backend Server Endpoint',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
             Text(
-              'Used for high-precision receipt extraction & multi-item parsing. Free at aistudio.google.com.',
+              'Server handling OpenAI completion API & Vision extraction for end-users.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.outline),
             ),
             const SizedBox(height: 8),
             TextField(
-              controller: _keyController,
-              obscureText: _obscureKey,
-              decoration: InputDecoration(
-                labelText: 'Gemini API Key',
-                hintText: 'AIzaSy...',
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.key_outlined),
-                suffixIcon: IconButton(
-                  icon: Icon(_obscureKey ? Icons.visibility_off : Icons.visibility),
-                  onPressed: () => setState(() => _obscureKey = !_obscureKey),
-                ),
+              controller: _serverUrlController,
+              decoration: const InputDecoration(
+                labelText: 'Server URL',
+                hintText: 'http://192.168.1.7:3000',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.dns_outlined),
               ),
             ),
             const SizedBox(height: 16),
+
+            // Optional direct API key
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: const Text('Direct API Key (Optional)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+              subtitle: const Text('Fallback if backend server is unreachable', style: TextStyle(fontSize: 11)),
+              children: [
+                TextField(
+                  controller: _keyController,
+                  obscureText: _obscureKey,
+                  decoration: InputDecoration(
+                    labelText: 'Gemini API Key',
+                    hintText: 'AIzaSy...',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.key_outlined),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscureKey ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setState(() => _obscureKey = !_obscureKey),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+            const SizedBox(height: 12),
 
             // Offline Queue Stats
             Container(
@@ -153,6 +176,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
         ),
         FilledButton(
           onPressed: () async {
+            await provider.setServerUrl(_serverUrlController.text.trim());
             await provider.setGeminiApiKey(_keyController.text.trim());
             if (context.mounted) {
               Navigator.pop(context);
