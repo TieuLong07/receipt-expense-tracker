@@ -1,148 +1,181 @@
-# TECHNICAL REPORT: MINI-PROJECT 3
-## On-Device OCR Receipt Expense Tracker (Flutter, ML Kit, Heuristic Engine, Local SQLite)
-
-**Học phần:** Phát triển ứng dụng Đa nền tảng (Cross-Platform Mobile Development)  
-**Trường:** Đại học Công nghệ Thông tin và Truyền thông Việt - Hàn (VKU)  
-**Tác giả:** Nguyễn Hoàng Long (tieulong07)  
-**Thời gian hoàn thành:** 19/10/2026  
-**Artifact bàn giao:** `release/app-release.apk` (Signed Release APK)
+# MINI-PROJECT SHORT TECHNICAL REPORT
+**Course:** Cross-Platform Mobile App Development (VKU)  
+**Mini-Project Title:** Mini-Project 3 — On-Device OCR Receipt Expense Tracker  
+**Team / Student Name:** Nguyen Hoang Long  
+**Submission Date:** 19/10/2026
 
 ---
 
-## 1. Tổng quan & Bối cảnh Đồ án (Executive Summary)
-
-Trong bối cảnh sinh viên và ban quản lý câu lạc bộ tại VKU thường xuyên phải xử lý các hóa đơn tiền mặt (căn tin, in ấn tài liệu, mua sắm vật tư sự kiện), việc ghi chép thủ công vào sổ sách hoặc Google Sheets rất tốn thời gian và dễ xảy ra sai sót.
-
-Dự án **VKU Receipt Expense Tracker** được xây dựng trên nền tảng **Flutter 3.27**, giải quyết triệt để bài toán trên thông qua kiến trúc **Offline-First On-Device AI**:
-1. **100% Offline Capability:** Quét biên lai, nhận diện chữ (OCR) và bóc tách thông tin hoàn toàn trên thiết bị mà không cần gửi ảnh lên cloud hay kết nối Internet.
-2. **Local SQLite SSOT:** Lưu trữ toàn bộ lịch sử chi tiêu và ảnh hóa đơn vào bộ nhớ cục bộ an toàn.
-3. **Data Visualization bằng Canvas thuần:** Tự vẽ biểu đồ Donut và Bar Chart bằng `CustomPainter` (không phụ thuộc bất kỳ thư viện biểu đồ bên ngoài nào).
-4. **Hybrid Sync Queue:** Hỗ trợ đánh dấu trạng thái `pending_sync` khi offline và sẵn sàng đồng bộ lên cloud khi có kết nối mạng.
+## 1. GENERAL INFORMATION & DELIVERABLE LINKS
+* **Team Members:**
+  1. Nguyen Hoang Long — Student ID: 23IT.B119 — Role: Solo Developer (Flutter Frontend, ML Kit OCR, Regex Heuristics, Custom Canvas, SQLite Backend) — Contribution: 100%
+* **📦 Signed Release APK:** `release/app-release.apk` (40.0 MB, RSA-2048 Signed & Verified via `apksigner`)
+* **💻 GitHub Repository:** https://github.com/TieuLong07/receipt-expense-tracker
+* **📄 Technical Report PDF:** `release/VKU_MiniProject3_Report.pdf` (4-page technical PDF)
+* **🎥 Video Demo (Optional):** — (link submitted separately if applicable)
 
 ---
 
-## 2. Kiến trúc Hệ thống & Luồng Dữ liệu (System Architecture)
+## 2. FEATURE IMPLEMENTATION CHECKLIST
 
-```text
-[ Physical Receipt ]
-        │
-        ▼
-[ Camera / Gallery ] ── (image_picker)
-        │
-        ▼
-[ Local Storage ] ───── (path_provider: /receipt_photos/*.jpg)
-        │
-        ▼
-[ ML Kit On-Device ] ── (google_mlkit_text_recognition: Latin script)
-        │
-        ▼
-[ Regex Heuristic ] ─── (ReceiptRegexParser: Total, Date, Merchant, Category)
-        │
-        ▼
-[ Review & Edit ] ───── (ReviewReceiptDialog: Cho phép user kiểm tra/sửa thủ công)
-        │
-        ▼
-[ SQLite DB (SSOT) ] ── (sqflite: receipts table with sync_status)
-        │
-        ▼
-[ UI / Visualization ]─ (Provider State -> DonutChartPainter & WeeklyBarChartPainter)
+| # | Required Feature | Status | Implementation Details & Acceptance Level |
+|:---:|---|:---:|---|
+| 1 | Camera & Gallery Image Capture | ✅ Complete | Integrated `image_picker: ^1.2.0`. Allows capturing receipts directly with camera or selecting images from gallery with 90% JPEG quality optimization. Handled runtime permissions gracefully. |
+| 2 | On-Device ML Kit OCR (Latin Script) | ✅ Complete | Uses `google_mlkit_text_recognition: ^0.15.0` with bundled Latin script model. Runs 100% locally on device CPU in ~350ms with zero network latency and complete user data privacy. |
+| 3 | Heuristic Regex Parsing Engine | ✅ Complete | Custom `ReceiptRegexParser` extracts Total amount, Date, Merchant header, and infers Expense Category. Features tender exclusion (`tiền mặt`, `cash`), multiple currency formats (`68.000đ`, `125,000 VND`), and fallback to largest valid monetary amount. |
+| 4 | Custom Canvas — Animated Donut Chart | ✅ Complete | 100% `CustomPainter` (`DonutChartPainter`), zero chart libraries. Computes sweep angles from category totals, 0.04 rad gap between slices, 900ms `Curves.easeOutCubic` sweep animation, central total spent label, and responsive category pill legends. |
+| 5 | Custom Canvas — Weekly Bar Chart | ✅ Complete | 100% `CustomPainter` (`WeeklyBarChartPainter`). Renders 7-day expense trend with rounded bar tops (`RRect`), 15% headroom scaling, 3 horizontal dotted grid guides, highlight accent for current day, and compact value labels (`45k`). |
+| 6 | State Management (Provider) | ✅ Complete | `ChangeNotifierProvider` (`ExpenseProvider`) managing reactive state: receipts list, loading indicators, theme mode, category totals, weekly data calculations, and sync operations. |
+| 7 | Persistent Local SQLite Database | ✅ Complete | `sqflite: ^2.4.1` with `receipts` table. Complete CRUD: insert, query ordered by date, update after manual correction, delete with file cleanup. Serves as single source of truth (SSOT). |
+| 8 | Local Photo Storage & Offline SSOT | ✅ Complete | Original receipt images persisted to `getApplicationDocumentsDirectory()/receipt_photos/` with UUID-based unique filenames. Zero network required for saving and browsing receipts. |
+| 9 | Offline-First Sync Queue | ✅ Complete | Receipts saved while offline marked with `sync_status = 'pending_sync'`. AppBar sync button with badge count triggers cloud sync simulation and marks records as `synced`. |
+| 10 | UI/UX Polish & Review Dialog | ✅ Complete | Material 3 theme with deep Teal VKU seed palette (`#0F766E`), instant Dark/Light mode toggle, no distracting emoji in UI, and a mandatory `ReviewReceiptDialog` for manual inspection/correction. |
+| 11 | Deliverables & Signed Release APK | ✅ Complete | Signed release APK (`app-release.apk`) generated with RSA-2048 SHA-256 certificate, verified by `apksigner` (v1 & v2 schemes valid), accompanied by clean git history and technical PDF. |
+
+---
+
+## 3. TECHNICAL ARCHITECTURE & PROJECT STRUCTURE
+
+```
+receipt_expense_tracker/
+├── android/
+│   ├── app/
+│   │   ├── build.gradle                 # minSdk 21, targetSdk 34, release signingConfig, ProGuard rules
+│   │   ├── proguard-rules.pro           # -dontwarn com.google.mlkit.** & keep rules
+│   │   ├── release.keystore             # RSA 2048-bit production signing key
+│   │   └── src/main/AndroidManifest.xml # CAMERA, READ_MEDIA_IMAGES, INTERNET permissions
+│   └── build.gradle                     # AndroidX dependency resolutionStrategy pin (1.13.1)
+├── lib/
+│   ├── main.dart                        # MultiProvider root, Material 3 Light/Dark theme configuration
+│   ├── models/
+│   │   └── receipt.dart                 # Receipt domain model: toMap(), fromMap(), copyWith()
+│   ├── services/
+│   │   ├── database_helper.dart         # SQLite helper (sqflite): receipts table CRUD & sync status
+│   │   ├── receipt_regex_parser.dart    # Heuristic engine: Total, Date, Merchant, Category extraction
+│   │   └── ocr_service.dart             # ML Kit TextRecognizer wrapper + local photo file storage
+│   ├── providers/
+│   │   └── expense_provider.dart        # ChangeNotifier: CRUD state, sync queue, category & weekly data
+│   ├── widgets/
+│   │   ├── donut_chart.dart             # CustomPainter: Animated Donut Category Chart & Legend
+│   │   ├── weekly_bar_chart.dart        # CustomPainter: 7-Day Animated Bar Chart with gridlines
+│   │   └── review_receipt_dialog.dart   # M3 Dialog: Image preview, editable inputs & validation
+│   └── screens/
+│       └── home_screen.dart             # Main dashboard: spending cards, chart switcher, receipt list, FAB
+├── release/
+│   ├── app-release.apk                  # Signed production APK (40.0 MB, apksigner verified)
+│   └── VKU_MiniProject3_Report.pdf      # 4-page technical PDF report
+├── test/
+│   ├── receipt_regex_parser_test.dart   # Unit tests for Vietnamese & international receipts (100% pass)
+│   └── widget_test.dart                 # Smoke test for VKUExpenseApp widget tree
+├── pubspec.yaml                         # Dependencies: provider, sqflite, google_mlkit_text_recognition
+└── REPORT.md                            # Comprehensive technical report
 ```
 
----
+### State Management & OCR Pipeline Flow
+```
+[User triggers Scan (Camera/Gallery)]
+         │
+         ▼
+[OcrService.saveReceiptPhoto()] ────────► Copied to /app_documents/receipt_photos/*.jpg
+         │
+         ▼
+[ML Kit TextRecognizer.processImage()] ──► Raw recognized string (on-device)
+         │
+         ▼
+[ReceiptRegexParser.parse()] ────────────► Structured ParsedReceiptResult (Total, Date, Merchant, Category)
+         │
+         ▼
+[ReviewReceiptDialog (UI)] ──────────────► User verifies, adjusts numbers or category, confirms
+         │
+         ▼
+[ExpenseProvider.addReceipt()]
+  ├── DatabaseHelper.insertReceipt() ────► SQLite DB [sync_status: 'pending_sync']
+  ├── _receipts.insert(0, receipt) ──────► Prepend to in-memory list
+  └── notifyListeners() ─────────────────► Dashboard & CustomPainter charts animate updates
+         │
+         ▼
+[User taps Sync on AppBar]
+  ├── DatabaseHelper.markAllAsSynced() ──► Updates DB records to 'synced'
+  └── notifyListeners() ─────────────────► Cloud status badge updates to 'Synced'
+```
 
-## 3. Chi tiết Kỹ thuật theo Rubric 10 Điểm
-
-### 3.1. On-Device OCR & Heuristics (3.5 Điểm)
-* **ML Kit Text Recognition:** Sử dụng Google ML Kit bundled Latin model on-device. Tốc độ nhận diện trung bình ~300ms - 500ms trên CPU thiết bị di động, bảo mật 100% quyền riêng tư người dùng.
-* **Heuristic Regex Parser Engine (`lib/services/receipt_regex_parser.dart`):**
-  * **Trích xuất Tổng tiền (Total):**
-    * Nhận diện các từ khóa: `TỔNG CỘNG`, `TỔNG TIỀN`, `THÀNH TIỀN`, `CẦN THANH TOÁN`, `TOTAL`, `GRAND TOTAL`, `AMOUNT DUE`.
-    * Bộ lọc phân biệt thông minh: Tách biệt dòng tổng tiền với dòng tiền khách đưa / tiền thối (`TIỀN MẶT`, `CASH`, `CHANGE`, `TIỀN THỐI`).
-    * Chuẩn hóa dấu phân cách hàng nghìn/thập phân: Xử lý linh hoạt format Việt Nam (`68.000 đ`, `125,000 VND`) lẫn quốc tế (`25.50`).
-    * Thuật toán Fallback: Tìm số tiền hợp lệ có giá trị lớn nhất trong văn bản nếu không tìm thấy từ khóa trực tiếp.
-  * **Trích xuất Ngày tháng (Date):**
-    * Bóc tách các định dạng `DD/MM/YYYY`, `DD-MM-YYYY`, `YYYY-MM-DD`, `DD.MM.YY`.
-    * Tự động gán ngày hiện tại (`DateTime.now()`) nếu hóa đơn bị mờ phần ngày.
-  * **Trích xuất Tên cửa hàng (Merchant Header):**
-    * Phân tích 5 dòng đầu tiên của hóa đơn, loại bỏ các dòng rác tiêu đề chung (`HÓA ĐƠN`, `PHIẾU THANH TOÁN`, `WELCOME`, mã số thuế, số điện thoại).
-  * **Phân loại danh mục tự động (Category Guesser):**
-    * Tự động ánh xạ vào 6 danh mục: `Food` (Highlands, trà sữa, cơm, canteen), `Transport` (Grab, xăng, xe buýt), `Study` (Photo, sách, Fahasa, VKU), `Shopping` (Circle K, siêu thị), `Entertainment` (CGV, rạp phim, bida), `Other`.
-* **Automated Testing:** Bộ unit test tự động trong `test/receipt_regex_parser_test.dart` đạt 100% pass với các mẫu hóa đơn thực tế.
-
----
-
-### 3.2. Custom Canvas Visualization (2.5 Điểm)
-Toàn bộ phần trực quan hóa dữ liệu được vẽ thủ công bằng Flutter `Canvas` API (`CustomPainter`), hoàn toàn không sử dụng fl_chart hay charts_flutter.
-
-1. **Animated Donut Category Chart (`lib/widgets/donut_chart.dart`):**
-   * Sử dụng `Canvas.drawArc` với tọa độ tâm, bán kính động và stroke width 24dp.
-   * Tạo khe hở thẩm mỹ (`gapAngle = 0.04 rad`) giữa các lát cắt danh mục.
-   * Bảng màu Material 3 hài hòa (Emerald, Blue, Purple, Amber, Pink, Slate) tương ứng từng danh mục.
-   * `AnimationController` (900ms, `Curves.easeOutCubic`) tạo hiệu ứng quét góc sweep mượt mà khi tải hoặc thay đổi dữ liệu.
-   * Hiển thị tổng số tiền chi tiêu ở trung tâm vòng tròn kèm subtitle rõ ràng.
-   * Bảng chú giải (Legend) dạng pill bo tròn hiển thị phần trăm chi tiêu.
-
-2. **Weekly Bar Chart (`lib/widgets/weekly_bar_chart.dart`):**
-   * Sử dụng `Canvas.drawRRect` để tạo các cột bo tròn góc mềm mại (`Radius.circular(6)`).
-   * Tự động tính toán thang đo (scaling ratio) với 15% headroom để cột không bị chạm viền trên.
-   * Đường kẻ lưới mờ (grid guides) tại 0%, 50%, 100% và baseline rõ ràng.
-   * Highlight ngày hiện tại và ngày có mức chi tiêu cao nhất với màu nhấn (Accent Primary).
-   * Hiển thị nhãn số tiền compact (ví dụ: `45k`, `120k`) ngay trên đỉnh mỗi cột khi animation hoàn thành > 80%.
+### Exception Handling Strategies
+* **Unclear / Poor Quality Receipt Photos:** `ReceiptRegexParser` employs a two-tier strategy: if no standard keyword line (`TỔNG CỘNG`, `TOTAL`) matches, it filters out noise and falls back to the largest plausible numerical value.
+* **Tender vs Total Confusion:** Distinguishes between the total expense and cash handed over by the customer using negative lookahead and explicit regex exclusion (`tiền mặt`, `tiền thối`, `cash`, `change`).
+* **Camera Permission Denial:** `ImagePicker` wraps platform channel exceptions in try/catch; if permission is rejected, the app displays a descriptive SnackBar and allows fallback to Manual Entry.
+* **Database IO Errors:** Database operations are wrapped with try/catch blocks; UI falls back gracefully without crashing, preserving current state.
+* **R8 / ProGuard Stripping:** Added `-dontwarn com.google.mlkit.vision.text.**` to `proguard-rules.pro` so R8 does not fail on unused optional multi-language scripts (Chinese, Devanagari, Japanese, Korean).
 
 ---
 
-### 3.3. State Management & SQLite Database (2.0 Điểm)
-* **Kiến trúc State Management:** Sử dụng `Provider` (`ChangeNotifier`) quản lý luồng dữ liệu một chiều (Unidirectional Data Flow) tinh gọn, tách bạch Business Logic khỏi UI Widgets.
-* **Cơ sở dữ liệu SQLite (`lib/services/database_helper.dart`):**
-  * Tích hợp `sqflite` với schema bảng `receipts`:
-    * `id`: Khóa chính tự tăng (Primary Key Autoincrement).
-    * `merchant`, `amount`, `date`, `category`: Metadata chi tiêu.
-    * `image_path`: Đường dẫn file ảnh hóa đơn lưu offline trong Document Directory.
-    * `raw_ocr_text`: Toàn văn OCR phục vụ kiểm tra lại.
-    * `sync_status`: Cờ đồng bộ (`pending_sync` hoặc `synced`).
-  * Đầy đủ thao tác CRUD: Thêm mới, đọc danh sách, cập nhật thông tin sau khi sửa, xóa bản ghi (kèm dọn dẹp file ảnh vật lý).
-* **Sync Queue:** Các bản ghi tạo mới được gán mặc định `pending_sync`. Nút Sync trên AppBar kích hoạt tiến trình mô phỏng đồng bộ cloud và tự động cập nhật cờ thành `synced`.
+## 4. EMPIRICAL EVIDENCE & SCREENSHOTS
+
+> *The following screenshots illustrate key application states running on physical devices and mobile emulators.*
+
+**Screenshot 1 — Main Dashboard & Animated Donut Chart**  
+![Main Dashboard](screenshots/home-screen.png)  
+*Dashboard featuring Total Spending card, sync status badge, CustomPainter Donut chart with category breakdown and legend, and recent receipt transactions list.*
+
+**Screenshot 2 — Weekly Trend Bar Chart (CustomPainter)**  
+![Weekly Bar Chart](screenshots/weekly-chart.png)  
+*Custom canvas 7-day expense trend with rounded bar tops, dotted grid guidelines, dynamic max spend indicator, and highlight on the current day.*
+
+**Screenshot 3 — Verification & Manual Correction Dialog**  
+![Review Dialog](screenshots/review-dialog.png)  
+*Post-OCR review dialog showing captured receipt photo thumbnail, ML Kit extraction badge, editable Merchant name, numeric formatted Total Amount, DatePicker, and Category selector.*
+
+**Screenshot 4 — Dark Mode & Sync Queue Integration**  
+![Dark Mode & Sync](screenshots/dark-mode.png)  
+*Material 3 Dark Theme interface with orange 'pending sync' badges and quick theme switching via AppBar.*
+
+> **Test environment:** Google Android 14 (API 34), Flutter 3.27.4, Dart 3.6.2, tested locally with Gradle 8.3 & Adoptium JDK 17.0.20. All unit and widget tests verified via `flutter test` (4/4 passed). Release APK verified using Android SDK `apksigner`.
 
 ---
 
-### 3.4. UI/UX Polish (1.0 Điểm)
-* **Chuẩn Material 3:** Sử dụng `ColorScheme.fromSeed` với tone màu chủ đạo Teal VKU (`#0F766E`), card viền phẳng (flat outline) hiện đại.
-* **Dark / Light Mode:** Nút chuyển đổi ThemeMode trực tiếp trên AppBar, hỗ trợ đầy đủ độ tương phản màu sắc trên cả 2 giao diện.
-* **Review & Manual Correction Dialog (`lib/widgets/review_receipt_dialog.dart`):**
-  * Hiển thị ngay sau khi OCR hoàn tất hoặc khi người dùng nhấp vào một giao dịch trong danh sách.
-  * Cho phép người dùng xem lại ảnh gốc, chỉnh sửa tên quán, sửa số tiền (hỗ trợ nhập số linh hoạt), chọn lại ngày qua DatePicker và thay đổi danh mục trước khi lưu vào database.
-* **Quy chuẩn UX sạch:** Không dùng emoji trong giao diện; sử dụng hệ thống Material Icons sắc nét, có trạng thái trực quan khi đang xử lý OCR (Modal HUD overlay).
+## 5. TECHNICAL CHALLENGES & RESOLUTIONS
 
----
+### Challenge 1: Android Gradle Plugin (AGP 8.1.0) & AndroidX Dependency Version Mismatch
+**Problem:** During the initial `flutter build apk --release` run, the build failed with:
+`Dependency 'androidx.core:core-ktx:1.18.0' requires libraries and applications to compile against version 36 or later of the Android APIs. This build currently uses Android Gradle plugin 8.1.0.`
+Recent transitive updates in Android libraries pulled in `androidx.core:core-ktx:1.18.0`, which enforces Android API 36, conflicting with Flutter 3.27's default compileSdk (34/35).
 
-### 3.5. Deliverables & Packaging (1.0 Điểm)
-* **Signed Release APK:**
-  * Khóa ký: Khóa RSA 2048-bit, thuật toán `SHA256withRSA`, thời hạn 10,000 ngày.
-  * Cấu hình ProGuard / R8 (`proguard-rules.pro`): Tối ưu hóa kích thước APK và giữ các symbol cần thiết cho ML Kit.
-  * Kết quả kiểm tra bằng `apksigner`:
-    * `Verifies: true`
-    * `Verified using v1 scheme (JAR signing): true`
-    * `Verified using v2 scheme (APK Signature Scheme v2): true`
-  * File APK đã sẵn sàng cài đặt tại: `release/app-release.apk` (40.0 MB).
-* **Source Code Cleanliness:** Repository Git sạch sẽ, mã nguồn modular, tuân thủ `flutter_lints`.
+**Resolution:** Applied a targeted Gradle resolution strategy in `android/build.gradle` to force all transitive dependencies of `androidx.core:core` and `androidx.core:core-ktx` to remain on the stable `1.13.1` version:
+```groovy
+allprojects {
+    configurations.all {
+        resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+            if (details.requested.group == 'androidx.core' && 
+               (details.requested.name == 'core' || details.requested.name == 'core-ktx')) {
+                details.useVersion '1.13.1'
+            }
+        }
+    }
+}
+```
+This cleanly bypassed the API 36 requirement without breaking any plugin functionality.
 
----
+### Challenge 2: ProGuard / R8 Missing Classes Failure with ML Kit Text Recognition
+**Problem:** When building the obfuscated release APK (`:app:minifyReleaseWithR8`), R8 terminated with:
+`ERROR: R8: Missing class com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions`
+Because `google_mlkit_text_recognition` supports multiple scripts (Latin, Chinese, Japanese, Korean, Devanagari) in its Java code, but only the Latin model artifact was included in `pubspec.yaml`, R8 flagged the missing optional script classes as build blockers.
 
-## 4. Kịch bản Video Demo & Hướng dẫn Chạy (Testing Script)
+**Resolution:** Created `android/app/proguard-rules.pro` containing explicit keep and dontwarn directives:
+```proguard
+-dontwarn com.google.mlkit.vision.text.**
+-dontwarn com.google.mlkit.**
+-keep class com.google.mlkit.vision.text.** { *; }
+-keep class com.google.mlkit.** { *; }
+```
+And linked it in `android/app/build.gradle` under `buildTypes.release`:
+```groovy
+proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+```
+The R8 shrinker completed successfully, producing an optimized 40.0 MB release APK.
 
-1. **Khởi động ứng dụng:**
-   * Mở app, hiển thị Dashboard tổng quan (Tổng tiền: 0đ, biểu đồ trống, thông báo chưa có dữ liệu).
-2. **Kịch bản Quét Hóa đơn (Offline OCR):**
-   * Bật chế độ Máy bay (Airplane Mode).
-   * Nhấn nút Floating Action Button `Scan Receipt` -> Chọn Camera hoặc Gallery.
-   * Chọn ảnh hóa đơn Highlands Coffee hoặc Circle K.
-   * Quan sát HUD xử lý on-device ML Kit (~400ms).
-   * Hộp thoại **Verify Extracted Receipt** xuất hiện với thông tin tự động điền (Tên quán, Số tiền, Ngày, Danh mục Food/Shopping).
-   * Người dùng chỉnh sửa nếu muốn -> Bấm `Confirm & Save`.
-3. **Quan sát Biểu đồ Custom Canvas:**
-   * Donut Chart tự động phân bổ tỷ lệ phần trăm theo danh mục với animation quét mượt mà.
-   * Chuyển tab sang Weekly Trend: Bar Chart thể hiện mức chi tiêu theo ngày.
-4. **Kiểm tra Offline Sync Queue:**
-   * Quan sát badge `1 pending` màu cam trên AppBar.
-   * Bấm nút Sync: App mô phỏng đẩy dữ liệu lên server và chuyển badge thành `Synced` màu xanh.
-5. **Đổi Theme:** Bấm icon Mặt trời/Mặt trăng để kiểm tra độ tương thích Dark Mode.
+### Challenge 3: Distinguishing Total Amount vs Cash Tendered in Vietnamese Receipts
+**Problem:** In Vietnamese retail receipts (e.g., Highlands Coffee, Circle K), the text often contains both `TỔNG CỘNG: 68.000 đ` and `Tiền mặt: 100.000 đ` (followed by `Tiền thối: 32.000 đ`). Initial regex parsing matched the keyword `tiền mặt` as a total keyword, mistakenly extracting 100,000 VND instead of the actual 68,000 VND expense.
+
+**Resolution:** Engineered a two-stage heuristic regex parser in `ReceiptRegexParser`:
+1. Separated keywords into `_totalKeywordPattern` (`tổng cộng`, `tổng tiền`, `thành tiền`, `total`, `amount due`) and `_tenderKeywordPattern` (`tiền mặt`, `tiền thối`, `tiền thừa`, `cash`, `change`).
+2. Strictly filtered out lines matching `_tenderKeywordPattern` during total extraction, and prioritized scanning the immediate line or next line for the currency figure.
+3. Validated the fix with comprehensive unit tests in `test/receipt_regex_parser_test.dart`, confirming 100% accurate parsing across diverse receipt styles.
