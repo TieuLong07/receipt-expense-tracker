@@ -3,7 +3,7 @@ import 'package:receipt_expense_tracker/services/receipt_regex_parser.dart';
 
 void main() {
   group('ReceiptRegexParser Unit Tests', () {
-    test('Parses WinMart receipt with item breakdown and discount correctly', () {
+    test('Parses WinMart receipt with voucher (subtotal 468k, total 68k) correctly', () {
       const sample = '''
       WinMart
       MSCH: 1645 NV: 09020371
@@ -36,7 +36,7 @@ void main() {
       expect(result.merchant, equals('WinMart'));
       // Net payable is 68,097 (never 850!)
       expect(result.amount, equals(68097.0));
-      // Subtotal of goods is 468,097
+      // Subtotal of goods is 468,097 (Gross with voucher)
       expect(result.subtotal, equals(468097.0));
       expect(result.date.day, equals(6));
       expect(result.date.month, equals(3));
@@ -51,6 +51,40 @@ void main() {
       expect(result.items[1].totalPrice, equals(65844.0));
       expect(result.items[3].name, contains('Ba rọi rút sườn'));
       expect(result.items[3].totalPrice, equals(120918.0));
+    });
+
+    test('Parses WinMart+ receipt without voucher (total == subtotal == 237576) correctly', () {
+      const sample = '''
+      WinMart+
+      MSCH: 4179 NV: 09016727
+      PHIẾU TÍNH TIỀN
+      25/04/2026 10:31|MSCH:4179|NV:09016727
+      Mã PTT: 417901260404425
+      Mã CQT: M1-26-CPN7O-04138504425
+      1 LÊ GIA mắm tôm 110g
+      17,500 1 17,500
+      2 KEWPIE Nước xốt mè rang chai 500ml
+      133,500 1 -19,600 113,900
+      3 WMNK Táo Royal Gala NZL
+      89,900 1.344 -14,650 106,176
+      TỔNG TIỀN: -34,250 237,576
+      Tiền cần thanh toán: 237,576
+      Hình thức thanh toán:
+      Điểm tích lũy: 0
+      D996
+      ''';
+
+      final result = ReceiptRegexParser.parse(sample);
+      expect(result.merchant, equals('WinMart+'));
+      // Total amount is 237,576
+      expect(result.amount, equals(237576.0));
+      // Subtotal MUST equal total (237,576), NEVER false 271,826!
+      expect(result.subtotal, equals(237576.0));
+      expect(result.date.day, equals(25));
+      expect(result.date.month, equals(4));
+      expect(result.date.year, equals(2026));
+      expect(result.category, isIn(['Food', 'Shopping']));
+      expect(result.items.length, equals(3));
     });
 
     test('Parses Highlands Coffee receipt correctly', () {

@@ -65,7 +65,7 @@ class ReceiptRegexParser {
 
   static String _extractMerchant(List<String> lines) {
     for (final line in lines.take(5)) {
-      final clean = line.replaceAll(RegExp(r'[^\w\s\u00C0-\u1EF9]', unicode: true), '').trim();
+      final clean = line.replaceAll(RegExp(r'[^\w\s\u00C0-\u1EF9\+]', unicode: true), '').trim();
       if (clean.length >= 3 && !_headerNoisePattern.hasMatch(clean)) {
         // Strip prefixes like "1 " or "CTY "
         return clean;
@@ -204,11 +204,13 @@ class ReceiptRegexParser {
     }
 
     // Determine final total
-    final effectiveSubtotal = totalSubtotal ?? (itemsSum > 0 ? itemsSum : 0.0);
-    // If netPayable is found and valid (e.g. 68,097), it represents actual out-of-pocket payment
-    final effectiveTotal = netPayable ?? (effectiveSubtotal > 0 ? effectiveSubtotal : _fallbackFindTotal(fullText));
+    final effectiveTotal = netPayable ?? (totalSubtotal ?? (itemsSum > 0 ? itemsSum : _fallbackFindTotal(fullText)));
+    // Subtotal (Gross) only differs from total if an explicit totalSubtotal was parsed from receipt AND it's greater than effectiveTotal (e.g. after voucher)
+    final effectiveSubtotal = (totalSubtotal != null && totalSubtotal > effectiveTotal)
+        ? totalSubtotal
+        : effectiveTotal;
 
-    return (total: effectiveTotal, subtotal: effectiveSubtotal > 0 ? effectiveSubtotal : effectiveTotal);
+    return (total: effectiveTotal, subtotal: effectiveSubtotal);
   }
 
   static double _fallbackFindTotal(String fullText) {

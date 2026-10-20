@@ -3,7 +3,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../models/receipt.dart';
+import '../providers/expense_provider.dart';
 
 class ReviewReceiptDialog extends StatefulWidget {
   final String initialMerchant;
@@ -42,6 +44,8 @@ class _ReviewReceiptDialogState extends State<ReviewReceiptDialog> {
   late DateTime _selectedDate;
   late String _selectedCategory;
   late List<ReceiptItem> _items;
+  late String _currentEngine;
+  bool _isAiEnhancing = false;
 
   static const List<String> _categories = [
     'Food',
@@ -55,6 +59,7 @@ class _ReviewReceiptDialogState extends State<ReviewReceiptDialog> {
   @override
   void initState() {
     super.initState();
+    _currentEngine = widget.engineName;
     _merchantController = TextEditingController(text: widget.initialMerchant);
     _amountController = TextEditingController(
       text: widget.initialAmount > 0 ? widget.initialAmount.toStringAsFixed(0) : '',
@@ -62,6 +67,38 @@ class _ReviewReceiptDialogState extends State<ReviewReceiptDialog> {
     _selectedDate = widget.initialDate;
     _selectedCategory = _categories.contains(widget.initialCategory) ? widget.initialCategory : 'Other';
     _items = List.from(widget.initialItems);
+  }
+
+  Future<void> _runCloudAi() async {
+    if (widget.imagePath == null) return;
+    final file = File(widget.imagePath!);
+    if (!file.existsSync()) return;
+
+    setState(() => _isAiEnhancing = true);
+    final provider = context.read<ExpenseProvider>();
+
+    try {
+      final res = await provider.backendService.analyzeReceiptViaServer(file);
+      if (!mounted) return;
+      setState(() {
+        _isAiEnhancing = false;
+        _merchantController.text = res.merchant;
+        _amountController.text = res.amount.toStringAsFixed(0);
+        _selectedDate = res.date;
+        _selectedCategory = res.category;
+        _items = List.from(res.items);
+        _currentEngine = 'Cloudflare DeepSeek AI';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cloud AI bóc tách chi tiết thành công!'), behavior: SnackBarBehavior.floating),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isAiEnhancing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('AI Cloud không phản hồi: $e'), backgroundColor: Colors.orange, behavior: SnackBarBehavior.floating),
+      );
+    }
   }
 
   @override
@@ -210,29 +247,49 @@ class _ReviewReceiptDialogState extends State<ReviewReceiptDialog> {
                   const SizedBox(height: 12),
                 ],
 
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.auto_awesome, size: 16, color: Theme.of(context).colorScheme.primary),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          _items.isNotEmpty
-                              ? 'Extracted ${_items.length} items with ${widget.engineName}'
-                              : 'Analyzed by ${widget.engineName}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: Theme.of(context).colorScheme.onPrimaryContainer,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.auto_awesome, size: 16, color: Theme.of(context).colorScheme.primary),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                _items.isNotEmpty
+                                    ? 'Extracted ${_items.length} items with $_currentEngine'
+                                    : 'Analyzed by $_currentEngine',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                    ),
                               ),
+                            ),
+                          ],
                         ),
                       ),
+                    ),
+                    if (widget.imagePath != null && _currentEngine.contains('ML Kit')) ...[
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: _isAiEnhancing ? null : _runCloudAi,
+                        icon: _isAiEnhancing
+                            ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.cloud_sync_outlined, size: 16),
+                        label: Text(_isAiEnhancing ? 'AI...' : 'Cloud AI', style: const TextStyle(fontSize: 11)),
+                      ),
                     ],
-                  ),
+                  ],
                 ),
                 const SizedBox(height: 14),
 

@@ -1,7 +1,6 @@
 // ponytail: Material 3 Home & Scanning screen with Gemini AI & Offline Processing Queue.
 
 import 'dart:io';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -53,152 +52,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       );
       if (pickedFile == null) return;
 
+      setState(() {
+        _isProcessingOcr = true;
+        _processingMessage = 'Scanning receipt with On-Device ML Kit...';
+      });
+
       // 1. Save photo locally for persistence
       final savedImagePath = await _ocrService.saveReceiptPhoto(File(pickedFile.path));
 
-      // 2. Check offline state
-      final conn = await Connectivity().checkConnectivity();
-      final isOnline = conn.any((r) => r != ConnectivityResult.none);
-
-      if (!isOnline) {
-        // OFFLINE: Queue receipt for automatic AI processing when network restores!
-        await provider.queueReceiptOffline(savedImagePath);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Offline: Receipt added to Queue. AI will process it automatically when connected!'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      // 3. ONLINE: Try Backend Server first (Zero client API key needed!)
-      setState(() {
-        _isProcessingOcr = true;
-        _processingMessage = 'AI Server is analyzing receipt & line items...';
-      });
-
-      try {
-        final serverResult = await provider.backendService.analyzeReceiptViaServer(File(savedImagePath));
-        if (!mounted) return;
-        setState(() => _isProcessingOcr = false);
-
-        final result = await showDialog<Receipt>(
-          context: context,
-          barrierDismissible: false,
-          builder: (ctx) => ReviewReceiptDialog(
-            initialMerchant: serverResult.merchant,
-            initialAmount: serverResult.amount,
-            initialSubtotal: serverResult.subtotal,
-            initialDate: serverResult.date,
-            initialCategory: serverResult.category,
-            initialItems: serverResult.items,
-            imagePath: savedImagePath,
-            rawOcrText: serverResult.rawText,
-            engineName: 'Cloudflare DeepSeek Vision',
-          ),
-        );
-
-        if (result != null && mounted) {
-          await provider.addReceipt(result);
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('AI Analyzed: ${result.merchant} (${NumberFormat.currency(locale: "vi_VN", symbol: "đ", decimalDigits: 0).format(result.amount)})'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-        return;
-      } catch (e) {
-        debugPrint('Backend server notice: $e');
-      }
-
-      // 4. Fallback A: Direct Gemini Flash Vision if API Key is configured on client
-      final apiKey = provider.geminiApiKey;
-      if (apiKey != null && apiKey.isNotEmpty) {
-        setState(() {
-          _isProcessingOcr = true;
-          _processingMessage = 'Gemini Flash AI Vision is analyzing receipt & items...';
-        });
-
-        try {
-          final geminiResult = await provider.geminiService.analyzeReceiptImage(File(savedImagePath));
-          if (!mounted) return;
-          setState(() => _isProcessingOcr = false);
-
-          final result = await showDialog<Receipt>(
-            context: context,
-            barrierDismissible: false,
-            builder: (ctx) => ReviewReceiptDialog(
-              initialMerchant: geminiResult.merchant,
-              initialAmount: geminiResult.amount,
-              initialSubtotal: geminiResult.subtotal,
-              initialDate: geminiResult.date,
-              initialCategory: geminiResult.category,
-              initialItems: geminiResult.items,
-              imagePath: savedImagePath,
-              rawOcrText: geminiResult.rawResponse,
-              engineName: 'Gemini Flash Vision',
-            ),
-          );
-
-          if (result != null && mounted) {
-            await provider.addReceipt(result);
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('AI Analyzed: ${result.merchant} (${NumberFormat.currency(locale: "vi_VN", symbol: "đ", decimalDigits: 0).format(result.amount)})'),
-                behavior: SnackBarBehavior.floating,
-              ),
-            );
-          }
-          return;
-        } catch (_) {}
-      }
-
-      // 4. Prompt if API Key is missing while online
-      if (apiKey == null || apiKey.isEmpty) {
-        if (!mounted) return;
-        final choice = await showDialog<String>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Setup Gemini Vision AI'),
-            content: const Text(
-              'Gemini Flash Vision extracts items, discounts & totals with 100% accuracy. Configure your free API Key in Settings for best results.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, 'skip'),
-                child: const Text('Use On-Device ML Kit'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, 'settings'),
-                child: const Text('Configure Key'),
-              ),
-            ],
-          ),
-        );
-
-        if (choice == 'settings') {
-          if (!mounted) return;
-          await showDialog(context: context, builder: (_) => const SettingsDialog());
-        }
-      }
-
-      // 5. Fallback: On-Device ML Kit OCR
-      setState(() {
-        _isProcessingOcr = true;
-        _processingMessage = 'On-Device ML Kit OCR & Regex Engine...';
-      });
-
+      // 2. Run instant on-device OCR (~200ms)
       final parsed = await _ocrService.processReceiptImage(savedImagePath);
 
       if (!mounted) return;
       setState(() => _isProcessingOcr = false);
 
+      // 3. Open Review & Correction Dialog immediately
       final result = await showDialog<Receipt>(
         context: context,
         barrierDismissible: false,

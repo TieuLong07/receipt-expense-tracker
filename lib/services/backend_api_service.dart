@@ -42,7 +42,7 @@ class BackendApiService {
         'image_base64': base64Image,
         'mime_type': 'image/jpeg',
       }),
-    ).timeout(const Duration(seconds: 40));
+    ).timeout(const Duration(seconds: 15));
 
     if (response.statusCode != 200) {
       throw Exception('Server Error (${response.statusCode}): ${response.body}');
