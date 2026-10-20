@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../models/receipt.dart';
 import '../providers/expense_provider.dart';
 import '../services/ocr_service.dart';
+import '../services/receipt_regex_parser.dart';
 import '../widgets/donut_chart.dart';
 import '../widgets/review_receipt_dialog.dart';
 import '../widgets/settings_dialog.dart';
@@ -48,20 +49,31 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     try {
       final pickedFile = await _picker.pickImage(
         source: source,
-        imageQuality: 92,
+        maxWidth: 1600,
+        maxHeight: 2000,
+        imageQuality: 85,
       );
       if (pickedFile == null) return;
 
       setState(() {
         _isProcessingOcr = true;
-        _processingMessage = 'Scanning receipt with On-Device ML Kit...';
+        _processingMessage = 'AI Cloud đang phân tích hóa đơn & món hàng...';
       });
 
       // 1. Save photo locally for persistence
       final savedImagePath = await _ocrService.saveReceiptPhoto(File(pickedFile.path));
 
-      // 2. Run instant on-device OCR (~200ms)
-      final parsed = await _ocrService.processReceiptImage(savedImagePath);
+      // 2. Default: Cloud AI Vision (DeepSeek via Cloudflare Worker)
+      ParsedReceiptResult parsed;
+      String engineUsed = 'Cloudflare DeepSeek AI';
+
+      try {
+        parsed = await provider.backendService.analyzeReceiptViaServer(File(savedImagePath));
+      } catch (cloudErr) {
+        debugPrint('Cloud AI notice: $cloudErr, falling back to On-Device ML Kit');
+        parsed = await _ocrService.processReceiptImage(savedImagePath);
+        engineUsed = 'On-Device ML Kit (Offline Fallback)';
+      }
 
       if (!mounted) return;
       setState(() => _isProcessingOcr = false);
@@ -79,7 +91,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           initialItems: parsed.items,
           imagePath: savedImagePath,
           rawOcrText: parsed.rawText,
-          engineName: 'On-Device ML Kit',
+          engineName: engineUsed,
         ),
       );
 
