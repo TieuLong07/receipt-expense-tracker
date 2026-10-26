@@ -9,7 +9,7 @@
 ## 1. GENERAL INFORMATION & DELIVERABLE LINKS
 * **Team Members:**
   1. Nguyen Hoang Long — Student ID: 23IT.B119 — Role: Solo Developer (Flutter Frontend, ML Kit OCR, Regex Heuristics, Custom Canvas, SQLite Backend) — Contribution: 100%
-* **📦 Signed Release APK:** `release/app-release.apk` (41.0 MB, RSA-2048 Signed & Verified via `apksigner`)
+* **📦 Signed Release APK:** [app-release.apk (41.0 MB)](https://github.com/TieuLong07/receipt-expense-tracker/releases/download/v1.0.0/app-release.apk) | [GitHub Release Page](https://github.com/TieuLong07/receipt-expense-tracker/releases/tag/v1.0.0)
 * **💻 GitHub Repository:** https://github.com/TieuLong07/receipt-expense-tracker
 * **☁️ Cloudflare Worker 24/7 API:** `https://receipt-expense-ai.nguyenhlong2203.workers.dev` (DeepSeek-v4.1 Vision Proxy)
 
