@@ -9,9 +9,9 @@
 ## 1. GENERAL INFORMATION & DELIVERABLE LINKS
 * **Team Members:**
   1. Nguyen Hoang Long — Student ID: 23IT.B119 — Role: Solo Developer (Flutter Frontend, ML Kit OCR, Regex Heuristics, Custom Canvas, SQLite Backend) — Contribution: 100%
-* **📦 Signed Release APK:** `release/app-release.apk` (40.0 MB, RSA-2048 Signed & Verified via `apksigner`)
+* **📦 Signed Release APK:** `release/app-release.apk` (41.0 MB, RSA-2048 Signed & Verified via `apksigner`)
 * **💻 GitHub Repository:** https://github.com/TieuLong07/receipt-expense-tracker
-* **🎥 Video Demo (Optional):** — (link submitted separately if applicable)
+* **☁️ Cloudflare Worker 24/7 API:** `https://receipt-expense-ai.nguyenhlong2203.workers.dev` (DeepSeek-v4.1 Vision Proxy)
 
 ---
 
@@ -117,22 +117,18 @@ receipt_expense_tracker/
 > *The following screenshots illustrate key application states running on physical devices and mobile emulators.*
 
 **Screenshot 1 — Main Dashboard & Animated Donut Chart**  
-![Main Dashboard](screenshots/home-screen.png)  
+![Main Dashboard](screenshots/home-screen.jpg)  
 *Dashboard featuring Total Spending card, sync status badge, CustomPainter Donut chart with category breakdown and legend, and recent receipt transactions list.*
 
-**Screenshot 2 — Weekly Trend Bar Chart (CustomPainter)**  
-![Weekly Bar Chart](screenshots/weekly-chart.png)  
-*Custom canvas 7-day expense trend with rounded bar tops, dotted grid guidelines, dynamic max spend indicator, and highlight on the current day.*
+**Screenshot 2 — Verification & Manual Correction Dialog (DeepSeek Cloud AI)**  
+![Review Dialog](screenshots/review-dialog.jpg)  
+*Post-OCR review dialog showing captured receipt photo thumbnail, Cloud AI extraction badge, editable Merchant name, numeric formatted Total Amount, DatePicker, Category selector, and parsed line items list.*
 
-**Screenshot 3 — Verification & Manual Correction Dialog**  
-![Review Dialog](screenshots/review-dialog.png)  
-*Post-OCR review dialog showing captured receipt photo thumbnail, ML Kit extraction badge, editable Merchant name, numeric formatted Total Amount, DatePicker, and Category selector.*
+**Screenshot 3 — Sample Physical Receipt Tested (WinMart+)**  
+![Sample Receipt](screenshots/sample-receipt.jpg)  
+*Complex multi-line retail thermal receipt tested with 100% itemization and total accuracy.*
 
-**Screenshot 4 — Dark Mode & Sync Queue Integration**  
-![Dark Mode & Sync](screenshots/dark-mode.png)  
-*Material 3 Dark Theme interface with orange 'pending sync' badges and quick theme switching via AppBar.*
-
-> **Test environment:** Google Android 14 (API 34), Flutter 3.27.4, Dart 3.6.2, tested locally with Gradle 8.3 & Adoptium JDK 17.0.20. All unit and widget tests verified via `flutter test` (4/4 passed). Release APK verified using Android SDK `apksigner`.
+> **Test environment:** Google Android 14 (API 34), Flutter 3.27.4, Dart 3.6.2, tested locally with Gradle 8.3 & Adoptium JDK 17.0.20. All unit and widget tests verified via `flutter test` (6/6 passed). Release APK verified using Android SDK `apksigner`.
 
 ---
 
@@ -184,9 +180,11 @@ The R8 shrinker completed successfully, producing an optimized 40.0 MB release A
 2. Strictly filtered out lines matching `_tenderKeywordPattern` during total extraction, and prioritized scanning the immediate line or next line for the currency figure.
 3. Validated the fix with comprehensive unit tests in `test/receipt_regex_parser_test.dart`, confirming 100% accurate parsing across diverse receipt styles.
 
-### Challenge 4: Enterprise Production Flow for End-Users (Server-Side LLM Proxy vs Client API Keys)
-**Problem:** Requiring end-users to register accounts at Google AI Studio or OpenAI, generate private API keys, and paste them into mobile settings is completely impractical for real production applications and creates major security leakage vulnerabilities.
-**Resolution:** Developed a dedicated Node.js / Express backend service (`server/src/index.js`) exposing `/api/analyze-receipt`:
-1. The mobile client simply dispatches base64 image data to the backend without carrying any secret credentials.
-2. The server-side proxy authenticates securely using environment variables (`LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`), formats OpenAI-compatible chat completion requests with Vision, and streams structured JSON directly back to the app.
+### Challenge 4: Enterprise Production Flow for End-Users (Server-Side LLM Proxy & Cloudflare Workers 24/7)
+**Problem:** Requiring end-users to register accounts at Google AI Studio or OpenAI, generate private API keys, and paste them into mobile settings is completely impractical for real production applications and creates major security leakage vulnerabilities. Furthermore, running a local computer server requires port forwarding, dynamic DNS, or keeps the personal PC running 24/7.
+
+**Resolution:** Built and deployed an edge serverless backend on Cloudflare Workers (`https://receipt-expense-ai.nguyenhlong2203.workers.dev`):
+1. The mobile client simply dispatches base64 image data to the worker endpoint without carrying any secret credentials.
+2. The Cloudflare Worker securely decrypts server secrets (`LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL = dsa/deepseek-v4.1-flash-1017`), interfaces directly with high-performance Vision LLM, and formats structured JSON responses back to the app in real time.
 3. Offline queueing guarantees that receipts captured in no-network areas are queued locally in SQLite and automatically batch-sent to the backend server as soon as connectivity resumes.
+4. If network timeout occurs or the device is in airplane mode, the app smoothly falls back to local On-Device ML Kit OCR, ensuring 100% operational availability.
